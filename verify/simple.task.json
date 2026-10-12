@@ -11,7 +11,7 @@
     },
     {
       "id": "S2",
-      "text": "Dither has three knobs - STYLE (Bayer, Floyd-Steinberg, Atkinson, Game Boy), PALETTE (1-bit, Game Boy, CGA, PICO-8) and PIXEL size (320, 160, 128 wide) - and every setting gives only palette colours.",
+      "text": "Dither is one switch plus knobs for style, palette and pixel size, and every setting gives only palette colours (the full option ranges are v3 R4).",
       "observable_by": "a test named \"dither knobs pick basic styles palettes and sizes\" passes"
     },
     {
@@ -21,7 +21,7 @@
     },
     {
       "id": "S4",
-      "text": "Holding the phone upright gives a 3:4 portrait picture (240x320) that is the right way up, and the date and time never overlap at any size.",
+      "text": "Holding the phone upright gives a 3:4 portrait picture (240x320 for dithered square pixels; the analog camcorder shape is v3 R1) that is the right way up, and the date and time never overlap at any size or pixel shape.",
       "observable_by": "tests named \"portrait frames are upright\" and \"date and time never overlap\" pass"
     }
   ],
@@ -31,13 +31,44 @@
       "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Knobs.kt",
       "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/SimpleTest.kt",
       "cases": [
-        { "id": "bend-knobs-at-zero-leave-the-picture-alone", "description": "Knobs.bend(0,0,0) is a neutral rack", "probe": true, "maps_to_clause": "S1" },
-        { "id": "each-bend-knob-gets-stronger-as-it-turns", "description": "for each knob alone, mean pixel difference from the input is >0 at 0.3 and larger at 1.0", "maps_to_clause": "S1" },
-        { "id": "dither-knobs-pick-basic-styles-palettes-and-sizes", "description": "knob ends map to the named styles/palettes/sizes, and a full pipeline frame at every combination stays in palette", "maps_to_clause": "S2" },
-        { "id": "photos-have-no-overlay", "description": "a capture taken with the overlay showing equals the same frame rendered with no overlay at all, scaled up", "maps_to_clause": "S3" },
-        { "id": "overlay-goes-through-the-tape-filter", "description": "with VHS on, most viewfinder pixels under the overlay are not the crisp overlay colours", "maps_to_clause": "S3" },
-        { "id": "portrait-frames-are-upright", "description": "portrait settings are 240x320; a sensor frame with a marker at its top-left, rotated 90, lands top-right of a 3:4 output; photo is 960x1280", "probe": true, "maps_to_clause": "S4" },
-        { "id": "date-and-time-never-overlap", "description": "at 320x240, 160x120, 128x112 and 240x320 the date and time boxes do not intersect and stay inside the frame", "probe": true, "maps_to_clause": "S4" }
+        {
+          "id": "bend-knobs-at-zero-leave-the-picture-alone",
+          "description": "Knobs.bend(0,0,0) is a neutral rack",
+          "probe": true,
+          "maps_to_clause": "S1"
+        },
+        {
+          "id": "each-bend-knob-gets-stronger-as-it-turns",
+          "description": "for each knob alone, mean pixel difference from the input is >0 at 0.3 and larger at 1.0",
+          "maps_to_clause": "S1"
+        },
+        {
+          "id": "dither-knobs-pick-basic-styles-palettes-and-sizes",
+          "description": "knob ends are real choices, and a full pipeline frame at a spread of knob combinations stays in palette",
+          "maps_to_clause": "S2"
+        },
+        {
+          "id": "photos-have-no-overlay",
+          "description": "a capture taken with the overlay showing equals the same frame rendered with no overlay at all, scaled up",
+          "maps_to_clause": "S3"
+        },
+        {
+          "id": "overlay-goes-through-the-tape-filter",
+          "description": "with VHS on, most viewfinder pixels under the overlay are not the crisp overlay colours",
+          "maps_to_clause": "S3"
+        },
+        {
+          "id": "portrait-frames-are-upright",
+          "description": "portrait settings are 240x320; a sensor frame with a marker at its top-left, rotated 90, lands top-right of a 3:4 output; photo is 960x1280",
+          "probe": true,
+          "maps_to_clause": "S4"
+        },
+        {
+          "id": "date-and-time-never-overlap",
+          "description": "at 320x240, 160x120, 128x112, 240x320, 64x48 and the analog 320x480 / 240x640 frames the date and time boxes do not intersect and stay inside the frame",
+          "probe": true,
+          "maps_to_clause": "S4"
+        }
       ]
     }
   ]

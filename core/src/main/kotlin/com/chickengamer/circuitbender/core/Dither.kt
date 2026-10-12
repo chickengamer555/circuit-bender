@@ -17,6 +17,8 @@ class Palette(
     val colors: IntArray,
     val monochrome: Boolean = colors.all { isGrey(it) },
     val spread: Float = 255f / maxOf(1, colors.size - 1),
+    /** > 0 for a natural palette: this many evenly spaced levels per channel. */
+    val levels: Int = 0,
 ) {
     /** Palette indices sorted darkest first, and their luma. */
     internal val byLuma: IntArray = colors.indices.sortedBy { luma(colors[it]) }.toIntArray()
@@ -110,6 +112,22 @@ object Palettes {
         ),
         spread = 64f,
     )
+
+    /**
+     * Natural colour: [levels] evenly spaced values per channel, so the
+     * picture keeps its own colours with levels^3 of them.
+     */
+    fun natural(levels: Int): Palette {
+        val n = levels.coerceIn(2, 16)
+        val step = 255f / (n - 1)
+        val colors = IntArray(n * n * n) {
+            val r = (it / (n * n) * step + 0.5f).toInt()
+            val g = (it / n % n * step + 0.5f).toInt()
+            val b = (it % n * step + 0.5f).toInt()
+            (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        return Palette("${n * n * n} colours", colors, monochrome = false, spread = step, levels = n)
+    }
 
     val ALL: List<Palette> = listOf(
         ONE_BIT, GAME_BOY, GAME_BOY_BGB, GAME_BOY_POCKET,
@@ -249,6 +267,15 @@ object Dither {
 
     /** Palette index nearest (r, g, b), via the palette's RGB565 table. */
     private fun nearestRgb(p: Palette, r: Float, g: Float, b: Float): Int {
+        if (p.levels > 0) {
+            // Natural palette: each channel quantises on its own.
+            val n = p.levels
+            val k = (n - 1) / 255f
+            val ri = (r * k + 0.5f).toInt().coerceIn(0, n - 1)
+            val gi = (g * k + 0.5f).toInt().coerceIn(0, n - 1)
+            val bi = (b * k + 0.5f).toInt().coerceIn(0, n - 1)
+            return (ri * n + gi) * n + bi
+        }
         val ri = r.toInt().coerceIn(0, 255) shr 3
         val gi = g.toInt().coerceIn(0, 255) shr 2
         val bi = b.toInt().coerceIn(0, 255) shr 3

@@ -51,8 +51,13 @@ data class BendSettings(
     val strideOffset: Int = 0,
     /** Lost VSYNC: rows the picture rolls per frame. */
     val vsyncRoll: Float = 0f,
-    /** Frame-buffer address line A[n] (byte address). */
+    /**
+     * Frame-buffer address line A[n] (byte address). Negative counts down
+     * from the top of the frame buffer: -1 is its highest address line.
+     */
     val addressBit: Int = 12,
+    /** Share of frames the address short makes contact (a pot near threshold). */
+    val addressDuty: Float = 1f,
     val addressMode: LineMode = LineMode.OFF,
     val bayerPhase: BayerPhase = BayerPhase.NONE,
     /** Pot on the CCD output / ADC reference: analog gain, 1 = untouched. */
@@ -262,7 +267,9 @@ class BendEngine(private val seed: Long = 1) {
                 if (s.bytePhaseSlip) Bus.slipByte(bytes)
             }
             if (s.timingActive) bytes = capture(bytes, pw, h, s, rnd)
-            bytes = frameMemory(bytes, w, h, s)
+            // An intermittent contact only shorts on some frames.
+            val engaged = s.addressActive && (s.addressDuty >= 1f || rnd.nextFloat() < s.addressDuty)
+            bytes = frameMemory(bytes, w, h, if (engaged) s else s.copy(addressMode = LineMode.OFF))
             px = Bus.unpack(bytes, w, h)
         } else {
             memory = null
@@ -327,7 +334,9 @@ class BendEngine(private val seed: Long = 1) {
         }
         val mem = memory?.takeIf { it.size == bytes.size }
             ?: (lastClean?.let { Bus.pack(it, w, h) } ?: ByteArray(bytes.size))
-        val bit = if (s.addressBit in 0..30) 1 shl s.addressBit else 0
+        val top = 31 - Integer.numberOfLeadingZeros(maxOf(1, bytes.size - 1))
+        val n = if (s.addressBit < 0) maxOf(0, top + 1 + s.addressBit) else s.addressBit
+        val bit = if (n in 0..30) 1 shl n else 0
         val high = s.addressMode == LineMode.HIGH
         for (addr in bytes.indices) {
             val target = if (high) addr or bit else addr and bit.inv()

@@ -53,17 +53,11 @@ class SimpleTest {
 
     @Test
     fun `dither knobs pick basic styles palettes and sizes`() {
-        assertEquals(DitherAlgorithm.BAYER_4, Knobs.ditherStyle(0f))
-        assertEquals(DitherAlgorithm.FLOYD_STEINBERG, Knobs.ditherStyle(0.35f))
-        assertEquals(DitherAlgorithm.ATKINSON, Knobs.ditherStyle(0.65f))
-        assertEquals(DitherAlgorithm.GAME_BOY_CAMERA, Knobs.ditherStyle(1f))
-        assertEquals(Palettes.ONE_BIT, Knobs.palette(0f))
-        assertEquals(Palettes.GAME_BOY, Knobs.palette(0.35f))
-        assertEquals(Palettes.CGA_1_HIGH, Knobs.palette(0.65f))
-        assertEquals(Palettes.PICO_8, Knobs.palette(1f))
+        // Which option sits where is V3Test's business; here: the ends are real
+        // choices and every combination stays in its palette.
+        assertEquals(DitherAlgorithm.entries.first(), Knobs.ditherStyle(0f))
+        assertEquals(DitherAlgorithm.entries.last(), Knobs.ditherStyle(1f))
         assertEquals(Resolution.CAMCORDER, Knobs.pixel(0f))
-        assertEquals(Resolution.LOFI, Knobs.pixel(0.5f))
-        assertEquals(Resolution.GAME_BOY, Knobs.pixel(1f))
 
         for (style in listOf(0f, 0.35f, 0.65f, 1f)) for (pal in listOf(0f, 0.35f, 0.65f, 1f)) for (px in listOf(0f, 1f)) {
             val s = PipelineSettings(
@@ -101,8 +95,8 @@ class SimpleTest {
         val src = IntArray(w * h) { rgb(90, 90, 90) }
         // Where would the overlay land, and in what colours, if drawn crisply?
         val mask = src.copyOf()
-        Osd.drawStamp(mask, w, h, osd)
-        Osd.drawViewfinder(mask, w, h, osd)
+        Osd.drawStamp(mask, w, h, osd, aspect = s.pixelAspect)
+        Osd.drawViewfinder(mask, w, h, osd, aspect = s.pixelAspect)
         val under = mask.indices.filter { mask[it] != src[it] }
         assertTrue(under.size > 200, "the overlay covers some pixels")
         val shown = Pipeline(2).process(src, s, osd, 3)
@@ -115,7 +109,8 @@ class SimpleTest {
 
     @Test
     fun `portrait frames are upright`() {
-        val s = PipelineSettings(portrait = true)
+        // Square-pixel (dithered) frames; the analog camcorder shape is V3Test's.
+        val s = PipelineSettings(portrait = true, ditherEnabled = true)
         assertEquals(240, s.width)
         assertEquals(320, s.height)
 
@@ -141,8 +136,13 @@ class SimpleTest {
 
     @Test
     fun `date and time never overlap`() {
-        for ((w, h) in listOf(320 to 240, 160 to 120, 128 to 112, 240 to 320)) {
-            val boxes = Osd.stampBoxes(w, h, osd)
+        for ((w, h, aspect) in listOf(Triple(320, 240, 1), Triple(160, 120, 1), Triple(128, 112, 1), Triple(240, 320, 1), Triple(64, 48, 1), Triple(320, 480, 2), Triple(240, 640, 2))) {
+            val boxes = Osd.stampBoxes(w, h, osd, aspect)
+            // Either both fit, or (64x48) the stamp is left off entirely.
+            if (w == 64) {
+                assertTrue(boxes.isEmpty(), "64x48 is too small for a stamp")
+                continue
+            }
             assertEquals(2, boxes.size)
             val (a, b) = boxes
             val overlap = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom

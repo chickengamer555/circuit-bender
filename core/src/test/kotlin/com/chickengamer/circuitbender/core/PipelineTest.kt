@@ -95,9 +95,9 @@ class PipelineTest {
     @Test
     fun `photo is the viewfinder frame scaled up`() {
         val pipeline = Pipeline(seed = 3)
-        val (w, h) = Resolution.CAMCORDER.width to Resolution.CAMCORDER.height
-        val src = IntArray(w * h) { (0xFF shl 24) or (it * 2654435761L.toInt() ushr 8) }
         val settings = PipelineSettings(bendEnabled = true, bend = BendSettings(strideOffset = 3))
+        val (w, h) = settings.width to settings.height
+        val src = IntArray(w * h) { (0xFF shl 24) or (it * 2654435761L.toInt() ushr 8) }
         // With no overlay on screen, the photo is exactly what was shown.
         val shown = pipeline.process(src, settings, null, frame = 12, clean = true)
         val k = 3
@@ -113,16 +113,17 @@ class PipelineTest {
 
     @Test
     fun `filters toggle independently`() {
-        val (w, h) = Resolution.CAMCORDER.width to Resolution.CAMCORDER.height
-        val src = IntArray(w * h) { (0xFF shl 24) or ((it % w) shl 16) or (((it / w) % 256) shl 8) or (it % 97) }
         val base = PipelineSettings()
-
-        val dithered = Pipeline(1).process(
-            src, base.copy(ditherEnabled = true, palette = Palettes.GAME_BOY, algorithm = DitherAlgorithm.BAYER_4), osd, 0,
-        )
+        fun frameFor(s: PipelineSettings): IntArray {
+            val w = s.width
+            return IntArray(w * s.height) { (0xFF shl 24) or ((it % w) shl 16) or (((it / w) % 256) shl 8) or (it % 97) }
+        }
+        val ditherSettings = base.copy(ditherEnabled = true, palette = Palettes.GAME_BOY, algorithm = DitherAlgorithm.BAYER_4)
+        val dithered = Pipeline(1).process(frameFor(ditherSettings), ditherSettings, osd, 0)
         val allowed = Palettes.GAME_BOY.colors.toSet()
         assertTrue(dithered.all { it in allowed }, "dithered photo, overlay included, uses only palette colours")
 
+        val src = frameFor(base)
         val plain = Pipeline(1).process(src, base, osd, 0)
         val bent = Pipeline(1).process(src, base.copy(bendEnabled = true, bend = BendSettings(crosstalkBit = 7)), osd, 0)
         assertFalse(plain.contentEquals(bent), "bend changes the picture")
@@ -132,8 +133,6 @@ class PipelineTest {
 
     @Test
     fun `full chain is fast enough for live preview`() {
-        val (w, h) = Resolution.CAMCORDER.width to Resolution.CAMCORDER.height
-        val src = IntArray(w * h) { (0xFF shl 24) or (it * 2654435761L.toInt() ushr 8) }
         val settings = PipelineSettings(
             bendEnabled = true,
             bend = BendSettings(
@@ -145,20 +144,25 @@ class PipelineTest {
             algorithm = DitherAlgorithm.FLOYD_STEINBERG,
             palette = Palettes.PICO_8,
         )
-        val pipeline = Pipeline(1)
-        // A live viewfinder runs thousands of frames: measure the JIT-compiled
-        // steady state, not compilation.
-        repeat(100) { pipeline.process(src, settings, osd, it.toLong()) }
-        // Best of three medians: a busy build machine can only make a run
-        // slower, so the fastest median is the honest measure of the code.
-        val median = (0 until 3).minOf { round ->
-            val times = (0 until 15).map {
-                val t0 = System.nanoTime()
-                pipeline.process(src, settings, osd, 1000L + round * 100 + it)
-                (System.nanoTime() - t0) / 1e6
-            }.sorted()
-            times[times.size / 2]
+        // Both heavy paths: everything on with dither, and the larger analog
+        // camcorder frame (320 x 480) with every bend on.
+        for (s in listOf(settings, settings.copy(ditherEnabled = false))) {
+            val src = IntArray(s.width * s.height) { (0xFF shl 24) or (it * 2654435761L.toInt() ushr 8) }
+            val pipeline = Pipeline(1)
+            // A live viewfinder runs thousands of frames: measure the JIT-compiled
+            // steady state, not compilation.
+            repeat(100) { pipeline.process(src, s, osd, it.toLong()) }
+            // Best of three medians: a busy build machine can only make a run
+            // slower, so the fastest median is the honest measure of the code.
+            val median = (0 until 3).minOf { round ->
+                val times = (0 until 15).map {
+                    val t0 = System.nanoTime()
+                    pipeline.process(src, s, osd, 1000L + round * 100 + it)
+                    (System.nanoTime() - t0) / 1e6
+                }.sorted()
+                times[times.size / 2]
+            }
+            assertTrue(median < 20.0, "${s.width}x${s.height} median frame time $median ms")
         }
-        assertTrue(median < 20.0, "median frame time $median ms")
     }
 }

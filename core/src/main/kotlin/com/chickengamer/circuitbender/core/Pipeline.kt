@@ -25,7 +25,19 @@ class YuvPlanes(
  * upright, and box-average it down to a camcorder-sized sensor.
  */
 object CameraSampler {
-    fun sample(planes: YuvPlanes, rotationDegrees: Int, outWidth: Int, outHeight: Int): IntArray {
+    /**
+     * Sample an [outWidth] x [outHeight] grid covering a centre crop of shape
+     * [aspectW]:[aspectH]. The grid need not be square-pixelled: an analog
+     * frame is 320 samples across 480 lines over a 4:3 picture.
+     */
+    fun sample(
+        planes: YuvPlanes,
+        rotationDegrees: Int,
+        outWidth: Int,
+        outHeight: Int,
+        aspectW: Int = outWidth,
+        aspectH: Int = outHeight,
+    ): IntArray {
         val out = IntArray(outWidth * outHeight)
         if (outWidth <= 0 || outHeight <= 0 || planes.width <= 0 || planes.height <= 0) return out
         val rot = Math.floorMod(rotationDegrees, 360)
@@ -37,12 +49,12 @@ object CameraSampler {
         // Centre crop of the upright image to the output aspect.
         val cropW: Float
         val cropH: Float
-        if (uw.toLong() * outHeight > uh.toLong() * outWidth) {
+        if (uw.toLong() * aspectH > uh.toLong() * aspectW) {
             cropH = uh.toFloat()
-            cropW = uh * outWidth / outHeight.toFloat()
+            cropW = uh * aspectW / aspectH.toFloat()
         } else {
             cropW = uw.toFloat()
-            cropH = uw * outHeight / outWidth.toFloat()
+            cropH = uw * aspectH / aspectW.toFloat()
         }
         val cx0 = (uw - cropW) / 2f
         val cy0 = (uh - cropH) / 2f
@@ -88,8 +100,11 @@ object CameraSampler {
 /** Working "sensor" sizes. */
 enum class Resolution(val width: Int, val height: Int, val label: String) {
     CAMCORDER(320, 240, "320x240"),
+    MID(240, 180, "240x180"),
     LOFI(160, 120, "160x120"),
-    GAME_BOY(128, 112, "128x112"),
+    GAME_BOY(128, 112, "128x112 Game Boy"),
+    TINY(96, 72, "96x72"),
+    MICRO(64, 48, "64x48"),
 }
 
 data class PipelineSettings(
@@ -102,10 +117,33 @@ data class PipelineSettings(
     val algorithm: DitherAlgorithm = DitherAlgorithm.BAYER_4,
     val palette: Palette = Palettes.GAME_BOY,
     val portrait: Boolean = false,
+    val ditherContrast: Float = 1f,
 ) {
-    /** Held upright the 4:3 sensor becomes 3:4. */
-    val width: Int get() = if (portrait) resolution.height else resolution.width
-    val height: Int get() = if (portrait) resolution.width else resolution.height
+    /**
+     * Dithered frames are square pixels at the chosen [resolution]. The
+     * camcorder frame is analog: 320 samples along each of 480 lines (VHS's
+     * ~330 x 480), so its pixels are twice as wide as they are tall. Held
+     * upright the picture is 3:4 and the lines are 240 samples long.
+     */
+    val width: Int
+        get() = when {
+            ditherEnabled -> if (portrait) resolution.height else resolution.width
+            portrait -> 240
+            else -> 320
+        }
+    val height: Int
+        get() = when {
+            ditherEnabled -> if (portrait) resolution.width else resolution.height
+            portrait -> 640
+            else -> 480
+        }
+
+    /** Pixel width over pixel height: 2 for the analog frame, 1 for dither. */
+    val pixelAspect: Int get() = if (ditherEnabled) 1 else 2
+
+    /** The picture's shape on screen and in saved photos. */
+    val displayWidth: Int get() = if (ditherEnabled) width else if (portrait) 3 else 4
+    val displayHeight: Int get() = if (ditherEnabled) height else if (portrait) 4 else 3
 }
 
 class Photo(val width: Int, val height: Int, val pixels: IntArray)
@@ -121,6 +159,9 @@ class Pipeline(private val seed: Long = 1) {
     private var clean: IntArray? = null
     private var cleanW = 0
     private var cleanH = 0
+    private var displayW = 4
+    private var displayH = 3
+    private var smooth = true
 
     /**
      * Render one frame and return the viewfinder picture. With [clean] set,
@@ -134,8 +175,8 @@ class Pipeline(private val seed: Long = 1) {
         val bent = if (settings.bendEnabled) bend.process(src, w, h, settings.bend, frame) else src.copyOf()
         val preview = if (osd != null) {
             val withOverlay = bent.copyOf()
-            Osd.drawStamp(withOverlay, w, h, osd)
-            Osd.drawViewfinder(withOverlay, w, h, osd)
+            Osd.drawStamp(withOverlay, w, h, osd, aspect = settings.pixelAspect)
+            Osd.drawViewfinder(withOverlay, w, h, osd, aspect = settings.pixelAspect)
             finish(withOverlay, settings, w, h, frame)
         } else {
             finish(bent, settings, w, h, frame)
@@ -143,14 +184,46 @@ class Pipeline(private val seed: Long = 1) {
         this.clean = if (!clean) null else if (osd == null) preview else finish(bent, settings, w, h, frame)
         cleanW = w
         cleanH = h
+        displayW = settings.displayWidth
+        displayH = settings.displayHeight
+        smooth = !settings.ditherEnabled
         return preview
     }
 
     private fun finish(px: IntArray, settings: PipelineSettings, w: Int, h: Int, frame: Long): IntArray {
         var out = px
         if (settings.vhsEnabled) out = Vhs.process(out, w, h, scaledVhs(settings.vhs, w, h), seed, frame)
-        if (settings.ditherEnabled) out = Dither.apply(out, w, h, settings.algorithm, settings.palette)
+        if (settings.ditherEnabled) {
+            if (settings.ditherContrast != 1f) out = contrast(out, settings.ditherContrast)
+            out = Dither.apply(out, w, h, settings.algorithm, settings.palette)
+        }
         return out
+    }
+
+    /**
+     * The last overlay-free frame at its true shape with [longSide] pixels on
+     * the long edge: smoothly resampled for the analog camcorder picture,
+     * hard-edged for dither.
+     */
+    fun capturePhoto(longSide: Int): Photo {
+        val src = clean ?: return Photo(0, 0, IntArray(0))
+        val w: Int
+        val h: Int
+        if (displayW >= displayH) {
+            w = longSide
+            h = longSide * displayH / displayW
+        } else {
+            h = longSide
+            w = longSide * displayW / displayH
+        }
+        val px = if (smooth) Resample.bilinear(src, cleanW, cleanH, w, h) else Resample.nearest(src, cleanW, cleanH, w, h)
+        return Photo(w, h, px)
+    }
+
+    private fun contrast(px: IntArray, c: Float): IntArray = IntArray(px.size) { i ->
+        val p = px[i]
+        fun ch(v: Int) = ((v - 128) * c + 128f).toInt().coerceIn(0, 255)
+        (0xFF shl 24) or (ch((p shr 16) and 0xFF) shl 16) or (ch((p shr 8) and 0xFF) shl 8) or ch(p and 0xFF)
     }
 
     /** The last overlay-free frame (see [process]), scaled up by [scale] with hard pixel edges. */
@@ -170,7 +243,9 @@ class Pipeline(private val seed: Long = 1) {
     /** The VHS numbers are for 320x240; keep them physically the same at other sizes. */
     private fun scaledVhs(v: VhsSettings, w: Int, h: Int): VhsSettings {
         if (w == 320 && h == 240) return v
-        val sx = maxOf(w, h) / 320f
+        // Distances along a line scale with samples per line; line counts
+        // with lines per field (240).
+        val sx = w / 320f
         return v.copy(
             chromaDivisor = maxOf(2, (v.chromaDivisor * sx).roundToInt()),
             chromaDelayPx = v.chromaDelayPx * sx,

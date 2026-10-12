@@ -101,13 +101,15 @@ object Osd {
     /**
      * Where the date (first) and time (second) go: date bottom-right, time
      * bottom-left, or, when the frame is too narrow for both on one line,
-     * the time right-aligned on the line above the date.
+     * the time right-aligned on the line above the date. Empty when the
+     * frame is too small to hold the stamp at all.
      */
-    fun stampBoxes(width: Int, height: Int, state: OsdState): List<Box> {
-        val s = scaleFor(height)
+    fun stampBoxes(width: Int, height: Int, state: OsdState, aspect: Int = 1): List<Box> {
+        val s = scaleFor(height / aspect)
+        val sy = s * aspect
         val mx = width * 8 / 100
         val my = height * 8 / 100
-        val lineH = Font5x7.HEIGHT * s
+        val lineH = Font5x7.HEIGHT * sy
         val dw = textWidth(Stamp.date(state.dateTime), s)
         val tw = textWidth(Stamp.time(state.dateTime), s)
         val y = height - my - lineH
@@ -116,9 +118,11 @@ object Osd {
         val timeBox = if (mx + tw + gap <= dateBox.left) {
             Box(mx, y, mx + tw, y + lineH)
         } else {
-            val y2 = y - lineH - 3 * s
+            val y2 = y - lineH - 3 * sy
             Box(width - mx - tw, y2, width - mx, y2 + lineH)
         }
+        // Too small a picture for a legible stamp: leave it off.
+        if (dateBox.left < 0 || timeBox.left < 0 || timeBox.top < 0) return emptyList()
         return listOf(dateBox, timeBox)
     }
 
@@ -141,7 +145,18 @@ object Osd {
     fun textWidth(text: String, scale: Int = 1) = maxOf(0, text.length * 6 - 1) * scale
 
     /** Draw [text] with a one-(scaled)-pixel [outline] ring, clipped to the frame. */
-    fun drawText(dst: IntArray, width: Int, height: Int, text: String, x: Int, y: Int, fg: Int, outline: Int, scale: Int = 1) {
+    fun drawText(
+        dst: IntArray,
+        width: Int,
+        height: Int,
+        text: String,
+        x: Int,
+        y: Int,
+        fg: Int,
+        outline: Int,
+        scale: Int = 1,
+        scaleY: Int = scale,
+    ) {
         if (width <= 0 || height <= 0) return
         for (pass in 0..1) {
             text.forEachIndexed { i, ch ->
@@ -150,11 +165,11 @@ object Osd {
                 for (row in 0 until Font5x7.HEIGHT) for (col in 0 until Font5x7.WIDTH) {
                     if (g[row] shr (4 - col) and 1 == 0) continue
                     val px = gx + col * scale
-                    val py = y + row * scale
+                    val py = y + row * scaleY
                     if (pass == 0) {
-                        fill(dst, width, height, px - scale, py - scale, scale * 3, scale * 3, outline)
+                        fill(dst, width, height, px - scale, py - scaleY, scale * 3, scaleY * 3, outline)
                     } else {
-                        fill(dst, width, height, px, py, scale, scale, fg)
+                        fill(dst, width, height, px, py, scale, scaleY, fg)
                     }
                 }
             }
@@ -182,47 +197,53 @@ object Osd {
      * The date and time stamp, which real camcorders superimpose onto the
      * recording itself - so the pipeline draws it before the tape chain.
      */
-    fun drawStamp(dst: IntArray, width: Int, height: Int, state: OsdState, palette: Palette? = null) {
+    fun drawStamp(dst: IntArray, width: Int, height: Int, state: OsdState, palette: Palette? = null, aspect: Int = 1) {
         if (!state.showDate || width <= 0 || height <= 0) return
-        val s = scaleFor(height)
+        val s = scaleFor(height / aspect)
         val ink = ink(palette)
-        val (dateBox, timeBox) = stampBoxes(width, height, state)
-        drawText(dst, width, height, Stamp.date(state.dateTime), dateBox.left, dateBox.top, ink.fg, ink.outline, s)
-        drawText(dst, width, height, Stamp.time(state.dateTime), timeBox.left, timeBox.top, ink.fg, ink.outline, s)
+        val boxes = stampBoxes(width, height, state, aspect)
+        if (boxes.isEmpty()) return
+        val (dateBox, timeBox) = boxes
+        drawText(dst, width, height, Stamp.date(state.dateTime), dateBox.left, dateBox.top, ink.fg, ink.outline, s, s * aspect)
+        drawText(dst, width, height, Stamp.time(state.dateTime), timeBox.left, timeBox.top, ink.fg, ink.outline, s, s * aspect)
     }
 
     /** Viewfinder-only indicators: tally dot and REC/STBY, tape speed, battery, counter. */
-    fun drawViewfinder(dst: IntArray, width: Int, height: Int, state: OsdState, palette: Palette? = null) {
+    fun drawViewfinder(dst: IntArray, width: Int, height: Int, state: OsdState, palette: Palette? = null, aspect: Int = 1) {
         if (width <= 0 || height <= 0) return
-        val s = scaleFor(height)
+        val s = scaleFor(height / aspect)
+        val sy = s * aspect
         val ink = ink(palette)
         val mx = width * 8 / 100
         val my = height * 8 / 100
 
-        // Top-left: blinking tally dot, then REC or STBY.
+        // Top-left: blinking tally dot, then REC or STBY. Vertical sizes use
+        // sy so shapes stay round on non-square pixels.
         val r = 3 * s
         if (state.recording && state.blinkOn) {
             for (dy in -r..r) for (dx in -r..r) {
                 val d = dx * dx + dy * dy
-                if (d <= (r + 1) * (r + 1)) plot(dst, width, height, mx + r + dx, my + r + dy, if (d <= r * r) ink.red else ink.outline)
+                if (d > (r + 1) * (r + 1)) continue
+                val c = if (d <= r * r) ink.red else ink.outline
+                for (k in 0 until aspect) plot(dst, width, height, mx + r + dx, my + (r + dy) * aspect + k, c)
             }
         }
         val label = if (state.recording) "REC" else "STBY"
-        drawText(dst, width, height, label, mx + 2 * r + 4 * s, my, ink.fg, ink.outline, s)
+        drawText(dst, width, height, label, mx + 2 * r + 4 * s, my, ink.fg, ink.outline, s, sy)
 
         // Top-right: battery, then tape speed and counter.
         val bw = 14 * s
-        val bh = 7 * s
+        val bh = 7 * sy
         val bx = width - mx - bw - 2 * s
-        fill(dst, width, height, bx - s, my - s, bw + 2 * s, bh + 2 * s, ink.outline)
+        fill(dst, width, height, bx - s, my - sy, bw + 2 * s, bh + 2 * sy, ink.outline)
         fill(dst, width, height, bx, my, bw, bh, ink.fg)
-        fill(dst, width, height, bx + s, my + s, bw - 2 * s, bh - 2 * s, ink.outline)
-        fill(dst, width, height, bx + bw, my + 2 * s, 2 * s, bh - 4 * s, ink.fg)
+        fill(dst, width, height, bx + s, my + sy, bw - 2 * s, bh - 2 * sy, ink.outline)
+        fill(dst, width, height, bx + bw, my + 2 * sy, 2 * s, bh - 4 * sy, ink.fg)
         val bars = state.battery.coerceIn(0, 3)
         val barW = (bw - 2 * s - 4 * s) / 3
-        for (i in 0 until bars) fill(dst, width, height, bx + 2 * s + i * (barW + s), my + 2 * s, barW, bh - 4 * s, ink.fg)
+        for (i in 0 until bars) fill(dst, width, height, bx + 2 * s + i * (barW + s), my + 2 * sy, barW, bh - 4 * sy, ink.fg)
 
         val line2 = "${state.tapeSpeed} ${Stamp.counter(state.counterSeconds)}"
-        drawText(dst, width, height, line2, width - mx - textWidth(line2, s), my + bh + 4 * s, ink.fg, ink.outline, s)
+        drawText(dst, width, height, line2, width - mx - textWidth(line2, s), my + bh + 4 * sy, ink.fg, ink.outline, s, sy)
     }
 }

@@ -462,6 +462,83 @@
       "contract_hash": "a5795cb553ff3402740d8735b7d39af8e59f7ba3ae3497b5e0885e5121dc2919",
       "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
       "confidence": "heuristic"
+    },
+    {
+      "task": "v3",
+      "unit": "v3",
+      "case": "camcorder-frames-are-analog-shaped-and-saved-smooth",
+      "key": "v3/camcorder-frames-are-analog-shaped-and-saved-smooth",
+      "matched_test": "V3Test > camcorder frames are analog shaped and saved smooth()",
+      "failed_at": "2026-10-12T11:13:48.241Z",
+      "contract_hash": "1227cf3d6ade7eb3e5d7837681630c73cfc2ee4c6f9b7ba611b3b86a999302c6",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v3",
+      "unit": "v3",
+      "case": "blacks-lift-and-whites-roll-off",
+      "key": "v3/blacks-lift-and-whites-roll-off",
+      "matched_test": "V3Test > blacks lift and whites roll off()",
+      "failed_at": "2026-10-12T11:13:48.241Z",
+      "contract_hash": "1227cf3d6ade7eb3e5d7837681630c73cfc2ee4c6f9b7ba611b3b86a999302c6",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v3",
+      "unit": "v3",
+      "case": "bright-lights-glow",
+      "key": "v3/bright-lights-glow",
+      "matched_test": "V3Test > bright lights glow()",
+      "failed_at": "2026-10-12T11:13:48.241Z",
+      "contract_hash": "1227cf3d6ade7eb3e5d7837681630c73cfc2ee4c6f9b7ba611b3b86a999302c6",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v3",
+      "unit": "v3",
+      "case": "grain-is-heavier-in-shadows",
+      "key": "v3/grain-is-heavier-in-shadows",
+      "matched_test": "V3Test > grain is heavier in shadows()",
+      "failed_at": "2026-10-12T11:13:48.241Z",
+      "contract_hash": "1227cf3d6ade7eb3e5d7837681630c73cfc2ee4c6f9b7ba611b3b86a999302c6",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v3",
+      "unit": "v3",
+      "case": "natural-colour-dither-keeps-the-colour",
+      "key": "v3/natural-colour-dither-keeps-the-colour",
+      "matched_test": "V3Test > natural colour dither keeps the colour()",
+      "failed_at": "2026-10-12T11:13:48.241Z",
+      "contract_hash": "1227cf3d6ade7eb3e5d7837681630c73cfc2ee4c6f9b7ba611b3b86a999302c6",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v3",
+      "unit": "v3",
+      "case": "dither-knobs-reach-every-option",
+      "key": "v3/dither-knobs-reach-every-option",
+      "matched_test": "V3Test > dither knobs reach every option()",
+      "failed_at": "2026-10-12T11:13:48.241Z",
+      "contract_hash": "1227cf3d6ade7eb3e5d7837681630c73cfc2ee4c6f9b7ba611b3b86a999302c6",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v3",
+      "unit": "v3",
+      "case": "six-bend-knobs-each-get-stronger",
+      "key": "v3/six-bend-knobs-each-get-stronger",
+      "matched_test": "V3Test > six bend knobs each get stronger()",
+      "failed_at": "2026-10-12T11:13:48.241Z",
+      "contract_hash": "1227cf3d6ade7eb3e5d7837681630c73cfc2ee4c6f9b7ba611b3b86a999302c6",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
     }
   ]
 }

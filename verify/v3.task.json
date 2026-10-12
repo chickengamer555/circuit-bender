@@ -1,0 +1,50 @@
+{
+  "task": "v3",
+  "title": "Realistic tape, natural-colour dither, wider controls",
+  "description": "Make the camcorder look like real analog video rather than pixelated digital, let dither keep natural colours with many more styles, palettes and sizes, and give bend six knobs - none of which can freeze the picture.",
+  "tier": "standard",
+  "clauses": [
+    {
+      "id": "R1",
+      "text": "Camcorder frames are an analog picture - 320 samples across by 480 lines (240 by 640 held upright), shown and saved at 4:3 with smooth, not blocky, scaling.",
+      "observable_by": "a test named \"camcorder frames are analog shaped and saved smooth\" passes"
+    },
+    {
+      "id": "R2",
+      "text": "The tape looks like tape: blacks are lifted grey not pure black, whites roll off softly, bright lights glow into their surroundings, and grain is heavier in the shadows than in the highlights.",
+      "observable_by": "tests named \"blacks lift and whites roll off\", \"bright lights glow\" and \"grain is heavier in shadows\" pass"
+    },
+    {
+      "id": "R3",
+      "text": "Dither can keep natural colours: a natural palette with N levels per channel has N cubed colours, and dithering an orange stays orange on average while using only palette colours.",
+      "observable_by": "a test named \"natural colour dither keeps the colour\" passes"
+    },
+    {
+      "id": "R4",
+      "text": "The dither knobs reach every algorithm, at least twelve colour choices (natural ones included), six pixel sizes from 320 down to 64 wide, and a contrast knob that changes the result.",
+      "observable_by": "a test named \"dither knobs reach every option\" passes"
+    },
+    {
+      "id": "R5",
+      "text": "Bend has six knobs - NOISE, TEAR, COLOUR, MEMORY, ROLL, BLOCKS. All at zero leaves the picture alone; each alone changes it and more is stronger; MEMORY never freezes the picture at any size.",
+      "observable_by": "tests named \"six bend knobs each get stronger\" and \"memory bend never freezes the picture\" pass"
+    }
+  ],
+  "units": [
+    {
+      "id": "v3",
+      "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Knobs.kt",
+      "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/V3Test.kt",
+      "cases": [
+        { "id": "camcorder-frames-are-analog-shaped-and-saved-smooth", "description": "default settings are 320x480 (portrait 240x640) with a 4:3 / 3:4 display shape; the saved photo is 1280x960 and a horizontal ramp has no 4-pixel flat runs", "maps_to_clause": "R1" },
+        { "id": "blacks-lift-and-whites-roll-off", "description": "noiseless VHS: pure black comes out as luma 10-30, pure white below 245", "maps_to_clause": "R2" },
+        { "id": "bright-lights-glow", "description": "a white square on black brightens pixels 3 px outside it compared with bloom off", "maps_to_clause": "R2" },
+        { "id": "grain-is-heavier-in-shadows", "description": "noise-only VHS: luma spread on a dark flat frame exceeds 1.3x that on a bright one", "maps_to_clause": "R2" },
+        { "id": "natural-colour-dither-keeps-the-colour", "description": "natural(4) has 64 colours; a flat orange through Bayer and Floyd-Steinberg averages within 8 per channel and stays in palette", "maps_to_clause": "R3" },
+        { "id": "dither-knobs-reach-every-option", "description": "style knob hits all 12 algorithms, colour knob >= 12 palettes incl. natural, pixel knob 6 sizes 320..64, contrast 0 vs 1 differ", "maps_to_clause": "R4" },
+        { "id": "six-bend-knobs-each-get-stronger", "description": "all zero is neutral; each of the six alone differs from the input at 0.3 and more at 1.0", "maps_to_clause": "R5" },
+        { "id": "memory-bend-never-freezes-the-picture", "description": "at every frame size, with MEMORY at 0.2 and 1.0, a changed input still changes the output within a few frames", "probe": true, "maps_to_clause": "R5" }
+      ]
+    }
+  ]
+}

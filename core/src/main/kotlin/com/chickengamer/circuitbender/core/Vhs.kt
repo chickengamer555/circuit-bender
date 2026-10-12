@@ -34,11 +34,19 @@ data class VhsSettings(
     val tracking: Float = 0f,
     /** Interline CCD vertical smear from clipped highlights. */
     val ccdSmear: Float = 0.01f,
+    /** Highlights glow into their surroundings (lens flare and tube bloom). */
+    val bloom: Float = 1f,
+    /** Video setup: black sits this far above zero. */
+    val blackLift: Float = 18f,
+    /** Darkening toward the corners from the camcorder's small zoom lens. */
+    val vignette: Float = 0.12f,
+    /** Extra wobble of the odd field against the even one (interlace). */
+    val fieldJitterPx: Float = 0.35f,
 ) {
     /** The deterministic part only: bandwidth, delay, sharpening and colour. */
     fun noiseless(): VhsSettings = copy(
         lumaNoise = 0f, chromaNoise = 0f, snow = 0f, dropouts = 0f, jitterPx = 0f,
-        headSwitchLines = 0, tracking = 0f, ccdSmear = 0f,
+        headSwitchLines = 0, tracking = 0f, ccdSmear = 0f, vignette = 0f, fieldJitterPx = 0f,
     )
 
     companion object {
@@ -55,7 +63,8 @@ data class VhsSettings(
 }
 
 object Vhs {
-    private const val KNEE = 235f
+    /** Above this the camcorder's knee circuit compresses highlights. */
+    private const val KNEE = 200f
 
     /** Independent stream per effect, so turning one artifact on never reshuffles another. */
     private fun rng(seed: Long, frame: Long, effect: Int) =
@@ -92,6 +101,7 @@ object Vhs {
         // Smear is charge in the CCD's vertical register, not image detail:
         // it goes on after the peaking so it is not sharpened into stripes.
         if (s.ccdSmear > 0f) ccdSmear(yp, src, w, h, s.ccdSmear)
+        if (s.bloom > 0f) bloom(yp, w, h, s.bloom)
 
         // Chroma: ~40 samples per line, vertically averaged over two lines,
         // delayed to the right.
@@ -102,12 +112,22 @@ object Vhs {
         if (s.snow > 0f) snow(yp, up, vp, w, h, s.snow, rng(seed, frame, 2))
         if (s.dropouts > 0f) dropouts(yp, up, vp, w, h, s.dropouts, rng(seed, frame, 3))
         if (s.tracking > 0f) tracking(yp, up, vp, w, h, s.tracking, frame, rng(seed, frame, 4))
-        if (s.jitterPx > 0f) jitter(yp, up, vp, w, h, s.jitterPx, frame, rng(seed, frame, 5))
+        if (s.jitterPx > 0f || s.fieldJitterPx > 0f) jitter(yp, up, vp, w, h, s.jitterPx, s.fieldJitterPx, frame, rng(seed, frame, 5))
         if (s.headSwitchLines > 0) headSwitch(yp, up, vp, w, h, s.headSwitchLines, rng(seed, frame, 6))
 
+        val lift = s.blackLift
+        val gain = 1f - lift / 255f
+        val cx = (w - 1) / 2f
+        val cy = (h - 1) / 2f
         Parallel.rows(h) { from, to ->
             for (i in from * w until to * w) {
-                val y = yp[i]
+                var y = yp[i]
+                if (s.vignette > 0f) {
+                    val dx = (i % w - cx) / maxOf(1f, cx)
+                    val dy = (i / w - cy) / maxOf(1f, cy)
+                    y *= 1f - s.vignette * 0.5f * (dx * dx + dy * dy)
+                }
+                y = lift + y * gain
                 val u = up[i]
                 val v = vp[i]
                 val r = byte(y + 1.140f * v)
@@ -152,7 +172,7 @@ object Vhs {
                     b
                 }
                 val v = tmp[x] + s.sharpen * (tmp[x] - blur)
-                yp[o + x] = if (v > KNEE) KNEE + (v - KNEE) * 0.4f else v
+                yp[o + x] = if (v > KNEE) KNEE + (v - KNEE) * 0.6f else v
             }
         }
     }
@@ -174,6 +194,35 @@ object Vhs {
     }
 
     private const val CLIP = 235f
+
+    /** Separable box blur (radius 4) of everything above the knee, spilled onto darker neighbours. */
+    private fun bloom(yp: FloatArray, w: Int, h: Int, amount: Float) {
+        val r = 4
+        val bright = FloatArray(w * h) { maxOf(0f, yp[it] - KNEE) }
+        val tmp = FloatArray(w * h)
+        Parallel.rows(h) { from, to ->
+            for (y in from until to) {
+                val o = y * w
+                for (x in 0 until w) {
+                    var sum = 0f
+                    for (k in maxOf(0, x - r)..minOf(w - 1, x + r)) sum += bright[o + k]
+                    tmp[o + x] = sum / (2 * r + 1)
+                }
+            }
+        }
+        Parallel.rows(h) { from, to ->
+            for (y in from until to) {
+                for (x in 0 until w) {
+                    var sum = 0f
+                    for (k in maxOf(0, y - r)..minOf(h - 1, y + r)) sum += tmp[k * w + x]
+                    // Glow spills from bright areas into darker surroundings;
+                    // inside a flat bright area there is nothing to spill into.
+                    val i = y * w + x
+                    yp[i] += amount * maxOf(0f, sum / (2 * r + 1) - bright[i])
+                }
+            }
+        }
+    }
     private const val SMEAR_CAP = 60f
 
     private fun chroma(c: FloatArray, w: Int, h: Int, divisor: Int, delay: Float) {
@@ -241,7 +290,9 @@ object Vhs {
                     // One random word feeds all three: 10 bits each.
                     val bits = rnd.nextInt()
                     grain = grain * 0.55f + ((bits and 0x3FF) * (1 / 1024f) - 0.5f)
-                    yp[o + x] += grain * ly
+                    // AGC gain lifts the shadows, and their noise with them.
+                    val agc = 1.6f - 1.2f * (yp[o + x] / 255f).coerceIn(0f, 1f)
+                    yp[o + x] += grain * ly * agc
                     if (x and 3 == 0) {
                         cu = cu * 0.88f + (((bits ushr 10) and 0x3FF) * (1 / 1024f) - 0.5f) * lc * 0.5f
                         cv = cv * 0.88f + (((bits ushr 20) and 0x3FF) * (1 / 1024f) - 0.5f) * lc * 0.5f
@@ -329,7 +380,17 @@ object Vhs {
     }
 
     /** Time-base error: smooth per-line wobble, no TBC. */
-    private fun jitter(yp: FloatArray, up: FloatArray, vp: FloatArray, w: Int, h: Int, amount: Float, frame: Long, rnd: Random) {
+    private fun jitter(
+        yp: FloatArray,
+        up: FloatArray,
+        vp: FloatArray,
+        w: Int,
+        h: Int,
+        amount: Float,
+        field: Float,
+        frame: Long,
+        rnd: Random,
+    ) {
         val phase = rnd.nextFloat() * 2 * PI.toFloat()
         val phase2 = rnd.nextFloat() * 2 * PI.toFloat()
         var walk = 0f
@@ -337,7 +398,8 @@ object Vhs {
         for (y in 0 until h) {
             walk = walk * 0.8f + (rnd.nextFloat() - 0.5f) * 0.6f
             val t = y.toFloat() / maxOf(1, h)
-            offsets[y] = amount * (0.6f * sin(t * 2 * PI.toFloat() * 3 + phase + frame * 0.4f) + 0.25f * sin(t * 37f + phase2) + walk)
+            offsets[y] = amount * (0.6f * sin(t * 2 * PI.toFloat() * 3 + phase + frame * 0.4f) + 0.25f * sin(t * 37f + phase2) + walk) +
+                if (y % 2 == 1) field else 0f
         }
         Parallel.rows(h) { from, to ->
             val buf = FloatArray(w)
