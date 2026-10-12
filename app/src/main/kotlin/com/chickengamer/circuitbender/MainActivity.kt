@@ -1,13 +1,13 @@
 package com.chickengamer.circuitbender
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.hardware.display.DisplayManager
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Bundle
@@ -16,6 +16,7 @@ import android.view.GestureDetector
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.OrientationEventListener
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
@@ -46,7 +47,13 @@ import java.io.File
 import java.time.LocalDateTime
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.abs
 
+/**
+ * The screen is locked upright like a stock camera app; the phone's own
+ * orientation decides whether a shot is portrait or landscape, the picture
+ * turns to stay upright, and the round buttons turn in place.
+ */
 class MainActivity : ComponentActivity() {
     private enum class Tab(val title: String) { VHS("VHS"), BEND("Bend"), DITHER("Dither") }
 
@@ -70,23 +77,28 @@ class MainActivity : ComponentActivity() {
 
     @Volatile private var ditherOn = false
     @Volatile private var style = 1f / 11 // Bayer 4x4
-    @Volatile private var colours = 1f / 13 // 27 natural colours
+    @Volatile private var colours = 1f / 18 // 27 natural colours
     @Volatile private var pixel = Resolution.CAMCORDER.ordinal / (Resolution.entries.size - 1f)
     @Volatile private var contrast = 0.5f
     @Volatile private var brightness = 0.5f
 
-    @Volatile private var portrait = false
     @Volatile private var battery = 3
+    /** How the phone is held: 0, 90, 180 or 270 degrees clockwise from upright. */
+    @Volatile private var deviceRotation = 0
 
     // --- Capture state ---------------------------------------------------------
     private var videoMode = false
     private val photoRequested = AtomicBoolean(false)
     @Volatile private var wantRecording = false
+    @Volatile private var recordRotation = 0
     private var recorder: VideoRecorder? = null // camera thread only
     private var recordFrame: Bitmap? = null // camera thread only
     private var thumbFromRecording = false // camera thread only
     @Volatile private var recordStartedAt = 0L
     private var frame = 0L
+
+    // What the last frame was sampled with, for mapping a tap onto the sensor.
+    @Volatile private var lastSensor = intArrayOf(0, 0, 0, 3, 4) // w, h, rotation, aspectW, aspectH
 
     private val pipeline = Pipeline(seed = System.nanoTime())
     private val io = Executors.newSingleThreadExecutor()
@@ -94,15 +106,16 @@ class MainActivity : ComponentActivity() {
     private lateinit var feed: CameraFeed
     private lateinit var viewfinder: ViewfinderView
     private lateinit var root: FrameLayout
-    private val controls = mutableListOf<View>()
-    private var shutter: ShutterView? = null
-    private var thumb: ImageView? = null
-    private var photoLabel: TextView? = null
-    private var videoLabel: TextView? = null
-    private var zoomLabel: TextView? = null
-    private var thumbBitmap: Bitmap? = null
+    private lateinit var shutter: ShutterView
+    private lateinit var thumb: ImageView
+    private lateinit var readout: TextView
+    private lateinit var photoLabel: TextView
+    private lateinit var videoLabel: TextView
+    private val chips = mutableMapOf<Tab, TextView>()
+    private val turning = mutableListOf<View>()
     private var sheet: View? = null
     private var sheetTab = Tab.VHS
+    private var torch = false
     private var lastUri: Uri? = null
     private var lastMime = "image/png"
 
@@ -115,10 +128,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val displayListener = object : DisplayManager.DisplayListener {
-        override fun onDisplayAdded(id: Int) {}
-        override fun onDisplayRemoved(id: Int) {}
-        override fun onDisplayChanged(id: Int) = feed.setRotation(displayRotation())
+    private val orientation by lazy {
+        object : OrientationEventListener(this) {
+            override fun onOrientationChanged(angle: Int) {
+                if (angle == ORIENTATION_UNKNOWN) return
+                // Snap to the nearest quarter turn, with a dead zone so it does
+                // not flicker when the phone is held near 45 degrees.
+                val nearest = ((angle + 45) / 90 % 4) * 90
+                val off = abs(((angle - nearest + 540) % 360) - 180) // degrees from that quarter
+                if (nearest != deviceRotation && off < 30) {
+                    deviceRotation = nearest
+                    runOnUiThread { turnButtons() }
+                }
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -130,33 +153,20 @@ class MainActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
-        viewfinder = ViewfinderView(this)
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        viewfinder = ViewfinderView(this)
         root.addView(viewfinder, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         setContentView(root)
-        portrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
 
-        feed = CameraFeed(this, ::displayRotation, { msg -> runOnUiThread { viewfinder.message = msg } }, ::onFrame)
+        feed = CameraFeed(this, { 0 }, { msg -> runOnUiThread { viewfinder.message = msg } }, ::onFrame)
         buildControls()
-        viewfinder.setOnTouchListener { _, e ->
-            pinch.onTouchEvent(e)
-            if (!pinch.isInProgress) gestures.onTouchEvent(e)
-            true
-        }
+        installGestures()
         if (granted()) feed.start() else askCamera.launch(Manifest.permission.CAMERA)
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        portrait = newConfig.orientation == Configuration.ORIENTATION_PORTRAIT
-        buildControls()
-        feed.setRotation(displayRotation())
     }
 
     override fun onResume() {
         super.onResume()
-        (getSystemService(Context.DISPLAY_SERVICE) as DisplayManager).registerDisplayListener(displayListener, null)
-        feed.setRotation(displayRotation())
+        if (orientation.canDetectOrientation()) orientation.enable()
         val pct = (getSystemService(Context.BATTERY_SERVICE) as BatteryManager).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         battery = when {
             pct > 66 -> 3
@@ -168,12 +178,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        (getSystemService(Context.DISPLAY_SERVICE) as DisplayManager).unregisterDisplayListener(displayListener)
+        orientation.disable()
         // The camera stops delivering frames while paused: close the file now.
         if (wantRecording) {
             wantRecording = false
             feed.post { finishRecording() }
-            shutter?.recording = false
+            shutter.recording = false
         }
     }
 
@@ -185,13 +195,13 @@ class MainActivity : ComponentActivity() {
 
     private fun granted() = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
-    private fun displayRotation(): Int = display?.rotation ?: 0
-
     // --- Camera thread -------------------------------------------------------------
 
-    private fun settings(): PipelineSettings = PipelineSettings(
+    private fun <T> pick(options: List<T>, k: Float): T = options[(k.coerceIn(0f, 1f) * (options.size - 1) + 0.5f).toInt()]
+
+    private fun settings(rotation: Int) = PipelineSettings(
         resolution = Knobs.pixel(pixel),
-        portrait = portrait,
+        portrait = rotation % 180 == 0,
         vhsEnabled = vhsOn,
         vhs = Knobs.vhs(wear, bleed, soft, glow),
         bendEnabled = bendOn,
@@ -204,16 +214,18 @@ class MainActivity : ComponentActivity() {
         quality = pick(Quality.entries, quality),
     )
 
-    private fun <T> pick(options: List<T>, k: Float): T = options[(k.coerceIn(0f, 1f) * (options.size - 1) + 0.5f).toInt()]
-
-    private fun onFrame(planes: YuvPlanes, rotation: Int) {
-        val s = settings()
+    private fun onFrame(planes: YuvPlanes, sensorRotation: Int) {
+        if (wantRecording && recorder == null) recordRotation = deviceRotation
+        // A recording keeps the orientation it started with.
+        val held = if (wantRecording || recorder != null) recordRotation else deviceRotation
+        val s = settings(held)
         val w = s.width
         val h = s.height
-        val px = CameraSampler.sample(planes, rotation, w, h, s.displayWidth, s.displayHeight)
-        if (feed.lensFacing == CameraSelector.LENS_FACING_FRONT) {
-            for (y in 0 until h) px.reverse(y * w, y * w + w)
-        }
+        val front = feed.lensFacing == CameraSelector.LENS_FACING_FRONT
+        val rot = CameraSampler.sampleRotation(sensorRotation, held, front)
+        lastSensor = intArrayOf(planes.width, planes.height, rot, s.displayWidth, s.displayHeight)
+        val px = CameraSampler.sample(planes, rot, w, h, s.displayWidth, s.displayHeight)
+        if (front) for (y in 0 until h) px.reverse(y * w, y * w + w)
 
         if (wantRecording && recorder == null) startRecording(s)
         if (!wantRecording && recorder != null) finishRecording()
@@ -235,7 +247,7 @@ class MainActivity : ComponentActivity() {
         }
         val shown = pipeline.process(px, s, osd, frame++, clean = takePhoto || recording, keepOverlay = overlayInPhotos)
         val smooth = !s.ditherEnabled
-        viewfinder.post(shown, w, h, s.displayWidth, s.displayHeight, smooth)
+        viewfinder.post(shown, w, h, s.displayWidth, s.displayHeight, smooth, held)
 
         if (recording) {
             val clean = pipeline.capture(1)
@@ -272,7 +284,7 @@ class MainActivity : ComponentActivity() {
             Log.e(TAG, "cannot start recording", e)
             wantRecording = false
             runOnUiThread {
-                shutter?.recording = false
+                shutter.recording = false
                 Toast.makeText(this, "Could not start recording", Toast.LENGTH_SHORT).show()
             }
         }
@@ -298,128 +310,137 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // --- Main controls ---------------------------------------------------------------
+    // --- Layout ------------------------------------------------------------------
 
-    /** Effect chips, PHOTO/VIDEO, shutter, flip and thumbnail: along the bottom upright, down the right sideways. */
+    private fun iconButton(icon: Int, onClick: () -> Unit) = ImageView(this).apply {
+        setImageResource(icon)
+        scaleType = ImageView.ScaleType.CENTER
+        background = Retro.rounded(this@MainActivity, 0x33FFFFFF, 24f)
+        setOnClickListener { onClick() }
+        turning += this
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
     private fun buildControls() {
-        controls.forEach { root.removeView(it) }
-        controls.clear()
-        sheet?.let { root.removeView(it) }
-        sheet = null
+        val icon = Retro.dp(this, 44f)
 
-        val chips = LinearLayout(this).apply {
-            orientation = if (portrait) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+        // Top bar: light, readout, adjust.
+        val top = FrameLayout(this).apply {
+            val p = Retro.dp(this@MainActivity, 12f)
+            setPadding(p, p, p, p)
         }
-        fun chipLp() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            val m = Retro.dp(this@MainActivity, 4f)
-            setMargins(m, m, m, m)
+        val light = iconButton(R.drawable.ic_flash) {}
+        light.setOnClickListener {
+            torch = !torch
+            feed.setTorch(torch)
+            light.background = Retro.rounded(this, if (torch) Retro.ACCENT else 0x33FFFFFF, 24f)
         }
+        top.addView(light, FrameLayout.LayoutParams(icon, icon, Gravity.START or Gravity.CENTER_VERTICAL))
+        readout = Retro.text(this, "", 14f).apply {
+            background = Retro.rounded(this@MainActivity, 0x99000000.toInt(), 14f)
+            val p = Retro.dp(this@MainActivity, 6f)
+            setPadding(p * 2, p, p * 2, p)
+            alpha = 0f
+            turning += this
+        }
+        top.addView(readout, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        top.addView(iconButton(R.drawable.ic_tune) { toggleSheet() }, FrameLayout.LayoutParams(icon, icon, Gravity.END or Gravity.CENTER_VERTICAL))
+        root.addView(top, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+
+        // Bottom panel: effect chips, PHOTO / VIDEO, then thumbnail, shutter, flip.
+        val bottom = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            val p = Retro.dp(this@MainActivity, 12f)
+            setPadding(p, p, p, p * 2)
+            background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xEE000000.toInt(), 0x00000000))
+        }
+        val chipRow = LinearLayout(this).apply { gravity = Gravity.CENTER }
         for (tab in Tab.entries) {
             val chip = Retro.chip(this, tab.title) {}
             chip.setOnClickListener {
                 setOn(tab, !isOn(tab))
-                Retro.paintChip(chip, isOn(tab))
-                refreshSheet()
+                paintChips()
+                if (sheet != null) openSheet(sheetTab)
             }
-            Retro.paintChip(chip, isOn(tab))
-            chips.addView(chip, chipLp())
+            chip.setOnLongClickListener {
+                openSheet(tab)
+                true
+            }
+            chips[tab] = chip
+            chipRow.addView(chip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                val m = Retro.dp(this@MainActivity, 5f)
+                setMargins(m, 0, m, 0)
+            })
         }
-        val adjust = Retro.chip(this, "Adjust") { openSheet(sheetTab) }
-        adjust.background = Retro.rounded(this, 0x33FFFFFF, 20f)
-        chips.addView(adjust, chipLp())
+        paintChips()
+        bottom.addView(chipRow)
 
-        val photoLabel = Retro.text(this, "PHOTO", 12f)
-        val videoLabel = Retro.text(this, "VIDEO", 12f)
-        this.photoLabel = photoLabel
-        this.videoLabel = videoLabel
-        val mode = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        photoLabel = Retro.text(this, "PHOTO", 13f)
+        videoLabel = Retro.text(this, "VIDEO", 13f)
+        val modeRow = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            val gap = Retro.dp(this@MainActivity, 10f)
-            photoLabel.setPadding(gap, gap, gap, gap)
-            videoLabel.setPadding(gap, gap, gap, gap)
+            val p = Retro.dp(this@MainActivity, 12f)
+            photoLabel.setPadding(p, p, p, p)
+            videoLabel.setPadding(p, p, p, p)
             addView(photoLabel)
             addView(videoLabel)
         }
         photoLabel.setOnClickListener { setVideoMode(false) }
         videoLabel.setOnClickListener { setVideoMode(true) }
+        bottom.addView(modeRow)
 
-        val shutterView = ShutterView(this).apply {
-            recording = wantRecording
-            setOnClickListener { shoot() }
+        shutter = ShutterView(this)
+        installShutter()
+        thumb = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = Retro.rounded(this@MainActivity, 0x33FFFFFF, 10f)
+            clipToOutline = true
+            setOnClickListener { openLast() }
+            turning += this
         }
-        shutter = shutterView
+        val flip = iconButton(R.drawable.ic_flip) { feed.flip() }
+        val big = Retro.dp(this, 78f)
+        val gap = Retro.dp(this, 34f)
+        val captureRow = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            addView(thumb, LinearLayout.LayoutParams(Retro.dp(this@MainActivity, 50f), Retro.dp(this@MainActivity, 50f)))
+            addView(shutter, LinearLayout.LayoutParams(big, big).apply { setMargins(gap, 0, gap, 0) })
+            addView(flip, LinearLayout.LayoutParams(Retro.dp(this@MainActivity, 50f), Retro.dp(this@MainActivity, 50f)))
+        }
+        bottom.addView(captureRow)
+        root.addView(bottom, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         paintMode()
 
-        val thumbView = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            background = Retro.rounded(this@MainActivity, 0x33FFFFFF, 8f)
-            clipToOutline = true
-            thumbBitmap?.let { setImageBitmap(it) }
-            setOnClickListener { openLast() }
+        // Keep the picture in the space between the bars.
+        val fit = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            viewfinder.setPictureArea(top.height, bottom.height)
         }
-        thumb = thumbView
-        val flip = Retro.text(this, "↻", 24f).apply {
-            gravity = Gravity.CENTER
-            background = Retro.rounded(this@MainActivity, 0x33FFFFFF, 24f)
-            setOnClickListener { feed.flip() }
-        }
+        top.addOnLayoutChangeListener(fit)
+        bottom.addOnLayoutChangeListener(fit)
+    }
 
-        val small = Retro.dp(this, 48f)
-        val big = Retro.dp(this, 76f)
-        val capture = LinearLayout(this).apply {
-            orientation = if (portrait) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            val m = Retro.dp(this@MainActivity, 18f)
-            addView(thumbView, LinearLayout.LayoutParams(small, small))
-            addView(shutterView, LinearLayout.LayoutParams(big, big).apply {
-                if (portrait) setMargins(m, 0, m, 0) else setMargins(0, m, 0, m)
-            })
-            addView(flip, LinearLayout.LayoutParams(small, small))
+    /** Turn the round buttons and readout so they read upright however the phone is held. */
+    private fun turnButtons() {
+        val target = -deviceRotation.toFloat()
+        for (v in turning) {
+            // Take the short way round (e.g. 0 -> -270 should turn +90).
+            var from = v.rotation % 360
+            var to = target
+            while (to - from > 180) to -= 360
+            while (from - to > 180) to += 360
+            v.animate().rotation(to).setDuration(200).start()
         }
+    }
 
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setBackgroundColor(0x99000000.toInt())
-            val p = Retro.dp(this@MainActivity, 10f)
-            setPadding(p, p, p, p)
-        }
-        if (portrait) {
-            bar.addView(chips)
-            bar.addView(mode)
-            bar.addView(capture)
-            root.addView(bar, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
-            bar.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> fitViewfinder(bottom = v.height, right = 0) }
-        } else {
-            bar.addView(chips)
-            bar.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-            bar.addView(mode)
-            bar.addView(capture)
-            bar.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-            root.addView(bar, FrameLayout.LayoutParams(Retro.dp(this, 150f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.END))
-            bar.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> fitViewfinder(bottom = 0, right = v.width) }
-        }
-        controls += bar
-
-        val zoom = Retro.text(this, "", 14f).apply {
-            background = Retro.rounded(this@MainActivity, 0x99000000.toInt(), 14f)
-            val p = Retro.dp(this@MainActivity, 8f)
-            setPadding(p * 2, p, p * 2, p)
-            alpha = 0f
-        }
-        zoomLabel = zoom
-        root.addView(zoom, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
-            topMargin = Retro.dp(this@MainActivity, 24f)
-        })
-        controls += zoom
+    private fun paintChips() {
+        for ((tab, chip) in chips) Retro.paintChip(chip, isOn(tab))
     }
 
     private fun paintMode() {
-        photoLabel?.setTextColor(if (videoMode) Retro.MUTED else Retro.ACCENT)
-        videoLabel?.setTextColor(if (videoMode) Retro.ACCENT else Retro.MUTED)
-        shutter?.video = videoMode
+        photoLabel.setTextColor(if (videoMode) Retro.MUTED else Retro.ACCENT)
+        videoLabel.setTextColor(if (videoMode) Retro.ACCENT else Retro.MUTED)
+        shutter.video = videoMode
     }
 
     /** Switch PHOTO / VIDEO - not while a recording is running. */
@@ -427,66 +448,6 @@ class MainActivity : ComponentActivity() {
         if (wantRecording) return
         videoMode = video
         paintMode()
-    }
-
-    // --- Camera shortcuts: pinch to zoom, double-tap to flip, swipe for photo/video,
-    //     volume keys to shoot -----------------------------------------------------
-
-    private val gestures by lazy {
-        GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent) = true
-
-            override fun onDoubleTap(e: MotionEvent): Boolean {
-                feed.flip()
-                return true
-            }
-
-            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                if (!feed.running && !granted()) askCamera.launch(Manifest.permission.CAMERA)
-                return true
-            }
-
-            override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
-                if (kotlin.math.abs(vx) < kotlin.math.abs(vy) * 1.5f) return false
-                setVideoMode(vx < 0) // swipe left for video, right for photo
-                return true
-            }
-        })
-    }
-
-    private val pinch by lazy {
-        ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            override fun onScale(d: ScaleGestureDetector): Boolean {
-                val ratio = feed.zoomBy(d.scaleFactor) ?: return true
-                showZoom(ratio)
-                return true
-            }
-        })
-    }
-
-    private fun showZoom(ratio: Float) {
-        val label = zoomLabel ?: return
-        label.text = "%.1fx".format(ratio)
-        label.animate().cancel()
-        label.alpha = 1f
-        label.animate().alpha(0f).setStartDelay(900).setDuration(400).start()
-    }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            if (event.repeatCount == 0) shoot()
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
-    }
-
-    /** Centre the picture in the space the control bar leaves free. */
-    private fun fitViewfinder(bottom: Int, right: Int) {
-        val lp = viewfinder.layoutParams as FrameLayout.LayoutParams
-        if (lp.bottomMargin == bottom && lp.rightMargin == right) return
-        lp.bottomMargin = bottom
-        lp.rightMargin = right
-        viewfinder.post { viewfinder.layoutParams = lp }
     }
 
     private fun isOn(tab: Tab) = when (tab) {
@@ -503,42 +464,220 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun showReadout(text: String) {
+        readout.text = text
+        readout.animate().cancel()
+        readout.alpha = 1f
+        readout.animate().alpha(0f).setStartDelay(900).setDuration(400).start()
+    }
+
+    // --- Shooting -------------------------------------------------------------------
+
     private fun shoot() {
         if (!feed.running) return
         if (!videoMode) {
             photoRequested.set(true)
             return
         }
-        wantRecording = !wantRecording
-        shutter?.recording = wantRecording
+        setRecording(!wantRecording)
     }
 
-    // --- Adjust sheet: closes on a tap outside; effects stay as they are ---------------
+    private fun setRecording(on: Boolean) {
+        wantRecording = on
+        shutter.recording = on
+    }
+
+    /** Tap to shoot; hold to record a clip for as long as the finger stays down. */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun installShutter() {
+        var holding = false
+        val hold = Runnable {
+            if (feed.running && !wantRecording) {
+                holding = true
+                shutter.video = true
+                setRecording(true)
+            }
+        }
+        shutter.setOnTouchListener { v, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.isPressed = true
+                    holding = false
+                    v.postDelayed(hold, 450)
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.isPressed = false
+                    v.removeCallbacks(hold)
+                    if (holding) {
+                        holding = false
+                        setRecording(false)
+                        paintMode()
+                    } else {
+                        shoot()
+                    }
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    v.isPressed = false
+                    v.removeCallbacks(hold)
+                    if (holding) {
+                        holding = false
+                        setRecording(false)
+                        paintMode()
+                    }
+                }
+            }
+            true
+        }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (event.repeatCount == 0) shoot()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    // --- Gestures on the picture ------------------------------------------------------
+    //   tap: focus there      double-tap: flip camera     pinch: zoom
+    //   drag up/down: exposure     swipe left/right: VIDEO / PHOTO
+    // Directions are as the user sees them, however the phone is held.
+
+    /** A screen-space vector turned into the holder's frame of reference. */
+    private fun held(dx: Float, dy: Float): Pair<Float, Float> = when (deviceRotation) {
+        90 -> -dy to dx
+        180 -> -dx to -dy
+        270 -> dy to -dx
+        else -> dx to dy
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun installGestures() {
+        var exposureDrag = 0f
+        val stepPx = Retro.dp(this, 36f).toFloat()
+        val gestures = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean {
+                exposureDrag = 0f
+                return true
+            }
+
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (sheet != null) {
+                    closeSheet()
+                    return true
+                }
+                if (!feed.running) {
+                    if (!granted()) askCamera.launch(Manifest.permission.CAMERA)
+                    return true
+                }
+                focusAt(e.x, e.y)
+                return true
+            }
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                feed.flip()
+                return true
+            }
+
+            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, sx: Float, sy: Float): Boolean {
+                val (hx, hy) = held(sx, sy)
+                if (abs(hy) <= abs(hx)) return false
+                exposureDrag += hy // dragging up gives positive scroll distance
+                val steps = (exposureDrag / stepPx).toInt()
+                if (steps != 0) {
+                    exposureDrag -= steps * stepPx
+                    feed.exposureBy(steps)?.let { showReadout("EV %+.1f".format(it)) }
+                }
+                return true
+            }
+
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
+                val (hx, hy) = held(vx, vy)
+                if (abs(hx) < abs(hy) * 1.5f) return false
+                setVideoMode(hx < 0) // swipe left for video, right for photo
+                return true
+            }
+        })
+        val pinch = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(d: ScaleGestureDetector): Boolean {
+                feed.zoomBy(d.scaleFactor)?.let { showReadout("%.1fx".format(it)) }
+                return true
+            }
+        })
+        viewfinder.setOnTouchListener { _, e ->
+            pinch.onTouchEvent(e)
+            if (!pinch.isInProgress) gestures.onTouchEvent(e)
+            true
+        }
+    }
+
+    private fun focusAt(x: Float, y: Float) {
+        val (u0, v) = viewfinder.toPicture(x, y) ?: return
+        val (sw, sh, rot, aw, ah) = lastSensor.toList()
+        if (sw == 0) return
+        // The front camera's picture is mirrored after sampling.
+        val u = if (feed.lensFacing == CameraSelector.LENS_FACING_FRONT) 1f - u0 else u0
+        val (fx, fy) = CameraSampler.sensorPoint(u, v, rot, sw, sh, aw, ah)
+        feed.focus(fx, fy)
+        showFocusRing(x, y)
+    }
+
+    private fun showFocusRing(x: Float, y: Float) {
+        val size = Retro.dp(this, 64f)
+        val ring = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setStroke(Retro.dp(this@MainActivity, 2f), Retro.ACCENT)
+            }
+        }
+        root.addView(ring, FrameLayout.LayoutParams(size, size).apply {
+            leftMargin = (x - size / 2).toInt()
+            topMargin = (y - size / 2).toInt()
+        })
+        ring.scaleX = 1.4f
+        ring.scaleY = 1.4f
+        ring.animate().scaleX(1f).scaleY(1f).setDuration(180).withEndAction {
+            ring.animate().alpha(0f).setStartDelay(600).setDuration(300).withEndAction { root.removeView(ring) }.start()
+        }.start()
+    }
+
+    // --- Adjust sheet: tap outside or the handle to close; effects stay as they are ---
+
+    private fun toggleSheet() {
+        if (sheet != null) closeSheet() else openSheet(sheetTab)
+    }
 
     private fun openSheet(tab: Tab) {
         sheetTab = tab
         sheet?.let { root.removeView(it) }
 
         val scrim = FrameLayout(this).apply {
-            setBackgroundColor(0x33000000)
+            setBackgroundColor(0x22000000)
             setOnClickListener { closeSheet() }
         }
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = Retro.rounded(this@MainActivity, Retro.GLASS, 18f)
-            val p = Retro.dp(this@MainActivity, 16f)
-            setPadding(p, p, p, p)
+            background = Retro.rounded(this@MainActivity, Retro.GLASS, 22f)
+            val p = Retro.dp(this@MainActivity, 18f)
+            setPadding(p, Retro.dp(this@MainActivity, 8f), p, p)
             isClickable = true // taps inside the panel must not close it
         }
+        val handle = View(this).apply {
+            background = Retro.rounded(this@MainActivity, 0x66FFFFFF, 3f)
+            setOnClickListener { closeSheet() }
+        }
+        panel.addView(handle, LinearLayout.LayoutParams(Retro.dp(this, 40f), Retro.dp(this, 5f)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = Retro.dp(this@MainActivity, 8f)
+        })
 
-        val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val tabs = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         for (t in Tab.entries) {
-            val label = Retro.text(this, t.title, 15f, if (t == tab) Retro.ACCENT else Retro.MUTED).apply {
+            tabs.addView(Retro.text(this, t.title, 16f, if (t == tab) Retro.ACCENT else Retro.MUTED).apply {
                 val p = Retro.dp(this@MainActivity, 8f)
-                setPadding(0, p, Retro.dp(this@MainActivity, 18f), p)
+                setPadding(0, p, Retro.dp(this@MainActivity, 20f), p)
                 setOnClickListener { openSheet(t) }
-            }
-            tabs.addView(label)
+            })
         }
         tabs.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         val toggle = Retro.chip(this, "") {}
@@ -549,46 +688,37 @@ class MainActivity : ComponentActivity() {
         toggle.setOnClickListener {
             setOn(tab, !isOn(tab))
             paintToggle()
-            buildControlsKeepingSheet()
+            paintChips()
         }
         paintToggle()
         tabs.addView(toggle)
         panel.addView(tabs)
 
         val knobs = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun switch(labelOn: String, labelOff: String, get: () -> Boolean, set: (Boolean) -> Unit) {
+            val chip = Retro.chip(this, "") {}
+            fun paint() {
+                chip.text = if (get()) labelOn else labelOff
+                Retro.paintChip(chip, get())
+            }
+            chip.setOnClickListener {
+                set(!get())
+                paint()
+            }
+            paint()
+            knobs.addView(chip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = Retro.dp(this@MainActivity, 10f)
+            })
+        }
         when (tab) {
             Tab.VHS -> {
+                knobs.addView(Retro.slider(this, "Camera quality", quality, { pick(Quality.entries, it).let { q -> "${q.label} · ${q.samples}" } }) { quality = it })
                 knobs.addView(Retro.slider(this, "Wear", wear, Retro::percent) { wear = it })
                 knobs.addView(Retro.slider(this, "Colour bleed", bleed, Retro::percent) { bleed = it })
                 knobs.addView(Retro.slider(this, "Softness", soft, Retro::percent) { soft = it })
-                knobs.addView(Retro.slider(this, "Camera quality", quality, { pick(Quality.entries, it).let { q -> "${q.label} (${q.samples})" } }) { quality = it })
                 knobs.addView(Retro.slider(this, "Glow", glow, Retro::percent) { glow = it })
-                val overlay = Retro.chip(this, "") {}
-                fun paintOverlay() {
-                    overlay.text = if (overlayOn) "REC & date: shown" else "REC & date: hidden"
-                    Retro.paintChip(overlay, overlayOn)
-                }
-                overlay.setOnClickListener {
-                    overlayOn = !overlayOn
-                    paintOverlay()
-                }
-                paintOverlay()
-                knobs.addView(overlay, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = Retro.dp(this@MainActivity, 12f)
-                })
-                val inPhotos = Retro.chip(this, "") {}
-                fun paintInPhotos() {
-                    inPhotos.text = if (overlayInPhotos) "In photos & video: yes" else "In photos & video: no"
-                    Retro.paintChip(inPhotos, overlayInPhotos)
-                }
-                inPhotos.setOnClickListener {
-                    overlayInPhotos = !overlayInPhotos
-                    paintInPhotos()
-                }
-                paintInPhotos()
-                knobs.addView(inPhotos, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = Retro.dp(this@MainActivity, 8f)
-                })
+                switch("REC & date shown", "REC & date hidden", { overlayOn }) { overlayOn = it }
+                switch("REC & date in photos", "REC & date not in photos", { overlayInPhotos }) { overlayInPhotos = it }
             }
             Tab.BEND -> {
                 knobs.addView(Retro.slider(this, "Noise", noise, Retro::percent) { noise = it })
@@ -606,20 +736,18 @@ class MainActivity : ComponentActivity() {
                 knobs.addView(Retro.slider(this, "Brightness", brightness, { "%+d".format(Knobs.brightness(it).toInt()) }) { brightness = it })
             }
         }
-        panel.addView(ScrollView(this).apply { addView(knobs) })
+        val scroll = ScrollView(this).apply { addView(knobs) }
+        panel.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        val lp = if (portrait) {
-            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
-                val m = Retro.dp(this@MainActivity, 10f)
-                setMargins(m, m, m, m)
-            }
-        } else {
-            FrameLayout.LayoutParams(Retro.dp(this, 360f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START).apply {
-                val m = Retro.dp(this@MainActivity, 10f)
-                setMargins(m, m, m, m)
-            }
+        val m = Retro.dp(this, 10f)
+        scrim.addView(panel, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
+            setMargins(m, m, m, m)
+        })
+        // Never taller than about half the screen, so the picture stays in view.
+        panel.post {
+            val max = root.height / 2
+            if (scroll.height > max) scroll.layoutParams = scroll.layoutParams.apply { height = max }
         }
-        scrim.addView(panel, lp)
         root.addView(scrim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         sheet = scrim
     }
@@ -629,27 +757,15 @@ class MainActivity : ComponentActivity() {
         sheet = null
     }
 
-    private fun refreshSheet() {
-        if (sheet != null) openSheet(sheetTab)
-    }
-
-    /** The chips mirror the sheet's on/off switch. */
-    private fun buildControlsKeepingSheet() {
-        val tab = sheetTab
-        buildControls()
-        openSheet(tab)
-    }
-
     // --- Results -----------------------------------------------------------------
 
     private fun setThumb(photo: Photo) {
         val full = Bitmap.createBitmap(photo.pixels, photo.width, photo.height, Bitmap.Config.ARGB_8888)
-        val side = Retro.dp(this, 48f)
+        val side = Retro.dp(this, 50f)
         val scale = side.toFloat() / minOf(photo.width, photo.height)
         val bmp = Bitmap.createScaledBitmap(full, maxOf(1, (photo.width * scale).toInt()), maxOf(1, (photo.height * scale).toInt()), true)
         if (bmp !== full) full.recycle()
-        thumbBitmap = bmp
-        thumb?.setImageBitmap(bmp)
+        thumb.setImageBitmap(bmp)
     }
 
     private fun saved(uri: Uri?, mime: String) {
@@ -664,7 +780,7 @@ class MainActivity : ComponentActivity() {
             root.addView(flash, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             flash.animate().alpha(0f).setDuration(200).withEndAction { root.removeView(flash) }.start()
         } else {
-            Toast.makeText(this, "Video saved", Toast.LENGTH_SHORT).show()
+            showReadout("Video saved")
         }
     }
 

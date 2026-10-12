@@ -1,0 +1,29 @@
+{
+  "task": "v5",
+  "title": "Camera-style rotation and tap to focus",
+  "description": "The phone's orientation, not the screen, decides whether a shot is portrait or landscape (the official sensor-plus-device rotation rule), and a tap on the picture focuses on that spot of the sensor.",
+  "tier": "quick",
+  "clauses": [
+    {
+      "id": "F1",
+      "text": "The frame comes out upright for however the phone is held: back camera rotation = sensor + device angle, front camera = sensor - device angle (Android's JPEG-orientation rule).",
+      "observable_by": "a test named \"frames come out upright however the phone is held\" passes"
+    },
+    {
+      "id": "F2",
+      "text": "Tapping a spot on the picture focuses on that same spot of the camera sensor, for every rotation and with the picture cropped to 4:3 or 3:4.",
+      "observable_by": "a test named \"tap maps to the same spot on the sensor\" passes"
+    }
+  ],
+  "units": [
+    {
+      "id": "v5",
+      "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Pipeline.kt",
+      "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/V5Test.kt",
+      "cases": [
+        { "id": "frames-come-out-upright-however-the-phone-is-held", "description": "sampleRotation for back and front cameras at device angles 0/90/180/270, including wrap-around", "maps_to_clause": "F1" },
+        { "id": "tap-maps-to-the-same-spot-on-the-sensor", "description": "for rotations 0/90/180/270 and 4:3 and 3:4 crops, a bright block placed at sensorPoint(u, v) shows up at (u, v) of the sampled picture", "probe": true, "maps_to_clause": "F2" }
+      ]
+    }
+  ]
+}

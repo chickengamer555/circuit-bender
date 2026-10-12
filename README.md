@@ -11,12 +11,18 @@ Tap **VHS**, **Bend** or **Dither** to switch an effect on or off. **Adjust** op
 - **Dither:** all 12 styles (Bayer, halftone, Game Boy Camera, Floyd–Steinberg, Atkinson, JJN, Stucki, Burkes, Sierra...); natural colours from 8 to 4096, or 1-bit, sepia, Game Boy, Virtual Boy, CGA, EGA, C64, ZX Spectrum or PICO-8; pixel size from 640x480 down to 64x48; contrast and brightness.
 
 **Shortcuts:**
+- Tap to focus.
+- Drag up/down for exposure.
 - Pinch to zoom.
 - Double-tap to flip camera.
 - Swipe left/right for VIDEO/PHOTO.
+- Hold the shutter to record a clip.
 - Volume buttons take the shot.
+- Long-press an effect chip to open its settings.
 
-Photos are saved as PNG in `Pictures/CircuitBender`, and videos as MP4 in `Movies/CircuitBender` (no sound yet). It works upright (3:4) and sideways (4:3).
+The screen stays upright like a stock camera: turn the phone and the shot becomes landscape, while the picture and buttons rotate to match.
+
+Photos are saved as PNG in `Pictures/CircuitBender`, and videos as MP4 in `Movies/CircuitBender` (no sound yet). 
 
 ## Install
 

@@ -583,6 +583,28 @@
       "contract_hash": "358547e0ac964d50d61a9080f3395a95716037d7754f3062146ab7d30c1187bc",
       "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
       "confidence": "heuristic"
+    },
+    {
+      "task": "v5",
+      "unit": "v5",
+      "case": "frames-come-out-upright-however-the-phone-is-held",
+      "key": "v5/frames-come-out-upright-however-the-phone-is-held",
+      "matched_test": "V5Test > frames come out upright however the phone is held()",
+      "failed_at": "2026-10-12T11:43:39.644Z",
+      "contract_hash": "29a5ac191b688af015ecb141246f4fe1a9c5dc4e0bb60e95f194861599d1edc7",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v5",
+      "unit": "v5",
+      "case": "tap-maps-to-the-same-spot-on-the-sensor",
+      "key": "v5/tap-maps-to-the-same-spot-on-the-sensor",
+      "matched_test": "V5Test > tap maps to the same spot on the sensor()",
+      "failed_at": "2026-10-12T11:43:39.644Z",
+      "contract_hash": "29a5ac191b688af015ecb141246f4fe1a9c5dc4e0bb60e95f194861599d1edc7",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
     }
   ]
 }

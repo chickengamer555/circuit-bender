@@ -26,6 +26,44 @@ class YuvPlanes(
  */
 object CameraSampler {
     /**
+     * Rotation that makes a frame upright for how the phone is held, with the
+     * screen locked upright ([rotationDegrees] is then the sensor's own
+     * angle). Android's JPEG-orientation rule: back = sensor + device, front =
+     * sensor - device.
+     */
+    fun sampleRotation(rotationDegrees: Int, deviceDegrees: Int, front: Boolean): Int =
+        Math.floorMod(if (front) rotationDegrees - deviceDegrees else rotationDegrees + deviceDegrees, 360)
+
+    /**
+     * Where point ([u], [v]) of a sampled picture (0..1 across and down) lies
+     * on the sensor, as 0..1 of its width and height - the inverse of [sample]
+     * for the same rotation and crop.
+     */
+    fun sensorPoint(u: Float, v: Float, rotationDegrees: Int, sensorW: Int, sensorH: Int, aspectW: Int, aspectH: Int): Pair<Float, Float> {
+        val rot = Math.floorMod(rotationDegrees, 360)
+        val uw = if (rot % 180 == 0) sensorW else sensorH
+        val uh = if (rot % 180 == 0) sensorH else sensorW
+        val cropW: Float
+        val cropH: Float
+        if (uw.toLong() * aspectH > uh.toLong() * aspectW) {
+            cropH = uh.toFloat()
+            cropW = uh * aspectW / aspectH.toFloat()
+        } else {
+            cropW = uw.toFloat()
+            cropH = uw * aspectH / aspectW.toFloat()
+        }
+        val ux = (uw - cropW) / 2f + u * cropW
+        val uy = (uh - cropH) / 2f + v * cropH
+        val (sx, sy) = when (rot) {
+            90 -> uy to sensorH - ux
+            180 -> sensorW - ux to sensorH - uy
+            270 -> sensorW - uy to ux
+            else -> ux to uy
+        }
+        return (sx / sensorW).coerceIn(0f, 1f) to (sy / sensorH).coerceIn(0f, 1f)
+    }
+
+    /**
      * Sample an [outWidth] x [outHeight] grid covering a centre crop of shape
      * [aspectW]:[aspectH]. The grid need not be square-pixelled: an analog
      * frame is 320 samples across 480 lines over a 4:3 picture.

@@ -5,6 +5,8 @@ import android.util.Size
 import androidx.activity.ComponentActivity
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
@@ -15,6 +17,7 @@ import androidx.core.content.ContextCompat
 import com.chickengamer.circuitbender.core.YuvPlanes
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * CameraX analysis stream at a modest 640x480: the pipeline averages it down
@@ -111,6 +114,27 @@ class CameraFeed(
         val ratio = (state.zoomRatio * factor).coerceIn(state.minZoomRatio, state.maxZoomRatio)
         cam.cameraControl.setZoomRatio(ratio)
         return ratio
+    }
+
+    /** Focus and meter on a point of the sensor image, given as 0..1 across and down. */
+    fun focus(x: Float, y: Float) {
+        val cam = camera ?: return
+        val point = SurfaceOrientedMeteringPointFactory(1f, 1f).createPoint(x, y)
+        val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+            .setAutoCancelDuration(4, TimeUnit.SECONDS)
+            .build()
+        cam.cameraControl.startFocusAndMetering(action)
+    }
+
+    /** Step exposure compensation by [steps]; returns the new value in EV, or null if unsupported. */
+    fun exposureBy(steps: Int): Float? {
+        val cam = camera ?: return null
+        val state = cam.cameraInfo.exposureState
+        if (!state.isExposureCompensationSupported) return null
+        val range = state.exposureCompensationRange
+        val index = (state.exposureCompensationIndex + steps).coerceIn(range.lower, range.upper)
+        cam.cameraControl.setExposureCompensationIndex(index)
+        return index * state.exposureCompensationStep.toFloat()
     }
 
     /** Remembered across rebinds, so the light stays on after FLIP. */
