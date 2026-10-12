@@ -36,6 +36,11 @@ class Palette(
         IntArray(Dither.LUMA_BUCKETS) { Dither.nearestLumaColor(this, it / 2f - 256f + 0.25f) }
     }
 
+    /** The brightness of the colour each [lumaLut] bucket picks, for the error term. */
+    internal val lumaLevelLut: FloatArray by lazy {
+        FloatArray(Dither.LUMA_BUCKETS) { Dither.nearestLumaLevel(this, it / 2f - 256f + 0.25f) }
+    }
+
     internal val rgbLut: ByteArray by lazy {
         ByteArray(32 * 64 * 32).also { lut ->
             for (ri in 0 until 32) for (gi in 0 until 64) for (bi in 0 until 32) {
@@ -372,6 +377,8 @@ object Dither {
 
     internal fun nearestLumaColor(p: Palette, y: Float): Int = p.colors[p.byLuma[nearestLuma(p, y)]]
 
+    internal fun nearestLumaLevel(p: Palette, y: Float): Float = p.lumas[nearestLuma(p, y)]
+
     /**
      * The Game Boy Camera's per-cell 3-threshold comparison: four shades, the
      * darkest below r0. Shades map onto the palette by brightness.
@@ -409,6 +416,8 @@ object Dither {
         val pad = 2
         val stride = w + 2 * pad
         val mono = p.monochrome
+        val monoColor = if (mono) p.lumaLut else IntArray(0)
+        val monoLevel = if (mono) p.lumaLevelLut else FloatArray(0)
         val ring = if (mono) arrayOf(FloatArray(stride * 3)) else Array(3) { FloatArray(stride * 3) }
         val n = k.taps.size / 3
         val tdx = IntArray(n) { k.taps[it * 3] }
@@ -450,9 +459,10 @@ object Dither {
                     val b = ring[0]
                     // Clamp so runaway error cannot leave a long trail after a hard edge.
                     val v = b[here + x].coerceIn(-128f, 383f)
-                    val li = nearestLuma(p, v)
-                    dst[y * w + x] = p.colors[p.byLuma[li]]
-                    val e = v - p.lumas[li]
+                    // Branch-free quantising through the half-unit lookup table.
+                    val bucket = lumaIndex(v)
+                    dst[y * w + x] = monoColor[bucket]
+                    val e = v - monoLevel[bucket]
                     for (t in 0 until n) b[rowOff[tdy[t]] + x + dir * tdx[t]] += e * tw[t]
                 } else {
                     val rb = ring[0]

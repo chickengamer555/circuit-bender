@@ -104,7 +104,9 @@ class MainActivity : ComponentActivity() {
     @Volatile private var lastSensor = intArrayOf(0, 0, 0, 3, 4) // w, h, rotation, aspectW, aspectH
 
     private val pipeline = Pipeline(seed = System.nanoTime())
-    private val pacer = FramePacer(maxFps = 30, maxBusy = 0.6f)
+    // Mostly a frame-rate cap: heat is handled by the thermal levels below,
+    // so a cool phone keeps as smooth a picture as it can.
+    private val pacer = FramePacer(maxFps = 30, maxBusy = 0.85f)
     private var sampleBuf: IntArray? = null // camera thread only
 
     /** The phone reports its temperature; the pacer slows down as it warms up. */
@@ -158,6 +160,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // One thread is faster and cooler on phones; see Parallel.enabled.
+        com.chickengamer.circuitbender.core.ParallelSwitch.set(false)
+        if (intent.getBooleanExtra("bench", false)) {
+            Thread {
+                Benchmark.run(this)
+                finish()
+            }.start()
+            return
+        }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
@@ -178,6 +189,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!::feed.isInitialized) return
         if (orientation.canDetectOrientation()) orientation.enable()
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         pacer.thermal = power.currentThermalStatus
@@ -193,6 +205,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        if (!::feed.isInitialized) return
         orientation.disable()
         (getSystemService(Context.POWER_SERVICE) as PowerManager).removeThermalStatusListener(thermalListener)
         // The camera stops delivering frames while paused: close the file now.
@@ -205,6 +218,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (!::feed.isInitialized) return
         feed.shutdown()
         io.shutdown()
     }

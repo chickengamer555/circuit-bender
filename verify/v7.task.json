@@ -1,0 +1,39 @@
+{
+  "task": "v7",
+  "title": "Fast high-resolution dither",
+  "description": "On the user's phone a 640x480 Floyd-Steinberg frame with tape took ~100 ms. VHS only carries ~320 samples per line, so with dither on the tape now runs at tape resolution and is smoothly scaled up before dithering; monochrome error diffusion quantises through a lookup table.",
+  "tier": "quick",
+  "clauses": [
+    {
+      "id": "T1",
+      "text": "With dither on at high resolution, the tape effect runs at tape resolution: it adds well under the cost of the dither itself instead of more than doubling the frame time.",
+      "observable_by": "a test named \"tape under hi res dither stays cheap\" passes"
+    },
+    {
+      "id": "T2",
+      "text": "Black-and-white error diffusion is at least as fast as colour error diffusion of the same picture, with unchanged output.",
+      "observable_by": "a test named \"monochrome diffusion is not slower than colour\" passes, and DitherTest's published-kernel oracle still passes"
+    }
+  ],
+  "units": [
+    {
+      "id": "v7",
+      "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Pipeline.kt",
+      "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/V7Test.kt",
+      "cases": [
+        {
+          "id": "tape-under-hi-res-dither-stays-cheap",
+          "description": "640x480 Floyd-Steinberg pipeline with VHS on takes at most 1.6x the same pipeline with VHS off (best of three medians)",
+          "maps_to_clause": "T1"
+        },
+        {
+          "id": "monochrome-diffusion-is-not-slower-than-colour",
+          "description": "Floyd-Steinberg at 640x480: 1-bit takes at most 1.1x the time of a 27-colour natural palette (best of three medians) - declared guard: the 2-3x monochrome slowdown was measured on the phone's Android runtime (ART) and does not occur on the desktop JVM, so this test cannot be observed red here; it must keep holding, and the on-device benchmark (Benchmark.kt) is the real check",
+          "maps_to_clause": "T2",
+          "guard": true,
+          "probe": true
+        }
+      ]
+    }
+  ]
+}

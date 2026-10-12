@@ -278,7 +278,17 @@ class Pipeline(private val seed: Long = 1) {
         val n = w * h
         var out = px
         if (settings.vhsEnabled) {
-            out = Vhs.process(out, w, h, scaledVhs(settings.vhs, w, h), seed, frame, buffer("$set-vhs", n))
+            // Tape carries ~320 samples a line however fine the dither grid is,
+            // so above that run it at tape resolution and scale smoothly back.
+            val tw = if (w >= h) 320 else 240
+            if (settings.ditherEnabled && w > tw) {
+                val th = h * tw / w
+                val small = Resample.bilinear(out, w, h, tw, th, buffer("$set-tape-in", tw * th))
+                val taped = Vhs.process(small, tw, th, scaledVhs(settings.vhs, tw, th), seed, frame, buffer("$set-tape-out", tw * th))
+                out = Resample.bilinear(taped, tw, th, w, h, buffer("$set-vhs", n))
+            } else {
+                out = Vhs.process(out, w, h, scaledVhs(settings.vhs, w, h), seed, frame, buffer("$set-vhs", n))
+            }
         }
         if (settings.ditherEnabled) {
             if (settings.ditherContrast != 1f || settings.ditherBrightness != 0f) {

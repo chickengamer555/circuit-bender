@@ -627,6 +627,17 @@
       "contract_hash": "ca341e5a360ab98ed848ca4bb9d392da23ee032bb148e1e3742083a4439aab35",
       "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
       "confidence": "heuristic"
+    },
+    {
+      "task": "v7",
+      "unit": "v7",
+      "case": "tape-under-hi-res-dither-stays-cheap",
+      "key": "v7/tape-under-hi-res-dither-stays-cheap",
+      "matched_test": "V7Test > tape under hi res dither stays cheap()",
+      "failed_at": "2026-10-12T12:01:57.559Z",
+      "contract_hash": null,
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
     }
   ]
 }
