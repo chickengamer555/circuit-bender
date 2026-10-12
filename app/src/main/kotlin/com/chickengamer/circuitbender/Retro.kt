@@ -1,6 +1,8 @@
 package com.chickengamer.circuitbender
 
 import android.content.Context
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -9,61 +11,64 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 
-/** Chunky monospace widgets in camcorder-button colours. */
+/** The app's few widgets: pill chips, tabs and labelled sliders on dark glass. */
 object Retro {
-    const val AMBER = 0xFFFFB000.toInt()
-    const val RED = 0xFFFF3030.toInt()
-    const val GREEN = 0xFF39FF14.toInt()
-    const val DIM = 0xFF8A8A8A.toInt()
-    const val PANEL = 0xB0101010.toInt()
+    const val ACCENT = 0xFFFFB000.toInt()
+    const val TEXT = 0xFFF2F2F2.toInt()
+    const val MUTED = 0xFF9A9A9A.toInt()
+    const val GLASS = 0xE6141414.toInt()
+
+    private val medium: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
     fun dp(ctx: Context, v: Float) = (v * ctx.resources.displayMetrics.density).toInt()
 
-    fun label(ctx: Context, text: String, color: Int = DIM, size: Float = 11f) = TextView(ctx).apply {
-        this.text = text
-        typeface = Typeface.MONOSPACE
-        setTextColor(color)
+    fun text(ctx: Context, value: String, size: Float = 13f, color: Int = TEXT) = TextView(ctx).apply {
+        text = value
         textSize = size
-    }
-
-    fun frame(ctx: Context, color: Int, filled: Boolean) = GradientDrawable().apply {
-        cornerRadius = dp(ctx, 4f).toFloat()
-        setStroke(dp(ctx, 2f), color)
-        setColor(if (filled) (color and 0x00FFFFFF) or 0x55000000 else 0x66000000)
-    }
-
-    fun button(ctx: Context, text: String, color: Int = AMBER, onClick: () -> Unit) = TextView(ctx).apply {
-        this.text = text
-        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        typeface = medium
         setTextColor(color)
-        textSize = 13f
+    }
+
+    fun rounded(ctx: Context, fill: Int, radiusDp: Float, stroke: Int = Color.TRANSPARENT) = GradientDrawable().apply {
+        cornerRadius = dp(ctx, radiusDp).toFloat()
+        setColor(fill)
+        if (stroke != Color.TRANSPARENT) setStroke(dp(ctx, 1.5f), stroke)
+    }
+
+    /** A pill that reads as on (filled accent) or off (outlined). */
+    fun chip(ctx: Context, label: String, onClick: () -> Unit) = text(ctx, label, 13f).apply {
         gravity = Gravity.CENTER
-        val p = dp(ctx, 8f)
-        setPadding(p, p, p, p)
-        background = frame(ctx, color, false)
+        val h = dp(ctx, 14f)
+        val v = dp(ctx, 7f)
+        setPadding(h, v, h, v)
         setOnClickListener { onClick() }
     }
 
-    /** Light up a button as on or off. */
-    fun paint(view: TextView, color: Int, on: Boolean) {
-        view.background = frame(view.context, if (on) color else DIM, on)
-        view.setTextColor(if (on) color else DIM)
+    fun paintChip(chip: TextView, on: Boolean) {
+        val ctx = chip.context
+        chip.background = if (on) rounded(ctx, ACCENT, 20f) else rounded(ctx, 0x66000000, 20f, 0x99FFFFFF.toInt())
+        chip.setTextColor(if (on) Color.BLACK else TEXT)
     }
 
-    /** A labelled 0..1 knob; [format] names the current value. */
-    fun knob(ctx: Context, title: String, initial: Float, format: (Float) -> String, onChange: (Float) -> Unit): LinearLayout {
-        val steps = 100
-        val caption = label(ctx, "", AMBER, 12f)
-        fun caption(v: Float) {
-            caption.text = "$title  ${format(v)}"
+    /** A labelled 0..1 slider: name on the left, current value on the right. */
+    fun slider(ctx: Context, title: String, initial: Float, format: (Float) -> String, onChange: (Float) -> Unit): LinearLayout {
+        val steps = 1000
+        val value = text(ctx, format(initial), 13f, ACCENT)
+        val header = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(text(ctx, title, 13f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(value)
         }
         val bar = SeekBar(ctx).apply {
             max = steps
             progress = (initial * steps).toInt()
+            progressTintList = ColorStateList.valueOf(ACCENT)
+            thumbTintList = ColorStateList.valueOf(ACCENT)
+            progressBackgroundTintList = ColorStateList.valueOf(0x55FFFFFF)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
                     val v = p / steps.toFloat()
-                    caption(v)
+                    value.text = format(v)
                     if (fromUser) onChange(v)
                 }
 
@@ -71,11 +76,14 @@ object Retro {
                 override fun onStopTrackingTouch(s: SeekBar?) {}
             })
         }
-        caption(initial)
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            addView(caption)
+            val p = dp(ctx, 4f)
+            setPadding(p, dp(ctx, 8f), p, 0)
+            addView(header)
             addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
     }
+
+    fun percent(v: Float) = "${(v * 100 + 0.5f).toInt()}%"
 }

@@ -535,7 +535,18 @@
       "case": "six-bend-knobs-each-get-stronger",
       "key": "v3/six-bend-knobs-each-get-stronger",
       "matched_test": "V3Test > six bend knobs each get stronger()",
-      "failed_at": "2026-10-12T11:13:48.241Z",
+      "failed_at": "2026-10-12T11:19:04.227Z",
+      "contract_hash": "1227cf3d6ade7eb3e5d7837681630c73cfc2ee4c6f9b7ba611b3b86a999302c6",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v3",
+      "unit": "v3",
+      "case": "memory-bend-never-freezes-the-picture",
+      "key": "v3/memory-bend-never-freezes-the-picture",
+      "matched_test": "V3Test > memory bend never freezes the picture()",
+      "failed_at": "2026-10-12T11:19:04.227Z",
       "contract_hash": "1227cf3d6ade7eb3e5d7837681630c73cfc2ee4c6f9b7ba611b3b86a999302c6",
       "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
       "confidence": "heuristic"

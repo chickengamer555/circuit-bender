@@ -11,8 +11,8 @@ import android.media.MediaMuxer
 import java.io.File
 
 /**
- * Encodes processed frames to an H.264 MP4. Frames are drawn, nearest-
- * neighbour scaled, onto the encoder's input surface; call everything from
+ * Encodes processed frames to an H.264 MP4. Frames are drawn, scaled,
+ * onto the encoder's input surface; call everything from
  * one thread (the camera thread).
  */
 class VideoRecorder(val width: Int, val height: Int, val file: File) {
@@ -20,7 +20,7 @@ class VideoRecorder(val width: Int, val height: Int, val file: File) {
     private val muxer = MediaMuxer(file.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
     private val surface: android.view.Surface
     private val info = MediaCodec.BufferInfo()
-    private val paint = Paint().apply { isFilterBitmap = false }
+    private val paint = Paint()
     private val dst = Rect()
     private var track = -1
     private var muxing = false
@@ -37,14 +37,19 @@ class VideoRecorder(val width: Int, val height: Int, val file: File) {
         codec.start()
     }
 
-    /** Draw one frame, letterboxed if its shape differs from the video's. */
-    fun addFrame(frame: Bitmap) {
+    /**
+     * Draw one frame at its display shape [displayW]:[displayH], letterboxed
+     * if that differs from the video's; [smooth] for analog, hard-edged for
+     * dither.
+     */
+    fun addFrame(frame: Bitmap, displayW: Int, displayH: Int, smooth: Boolean) {
         val canvas = surface.lockHardwareCanvas()
         try {
             canvas.drawColor(Color.BLACK)
-            val scale = minOf(width / frame.width.toFloat(), height / frame.height.toFloat())
-            val w = (frame.width * scale).toInt()
-            val h = (frame.height * scale).toInt()
+            paint.isFilterBitmap = smooth
+            val scale = minOf(width / displayW.toFloat(), height / displayH.toFloat())
+            val w = (displayW * scale).toInt()
+            val h = (displayH * scale).toInt()
             dst.set((width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2)
             canvas.drawBitmap(frame, null, dst, paint)
         } finally {
@@ -94,10 +99,11 @@ class VideoRecorder(val width: Int, val height: Int, val file: File) {
     }
 
     companion object {
-        /** Video size for a w x h frame: long side 640, even dimensions. */
+        /** Video size for a picture shaped w:h - long side 640, even dimensions. */
         fun sizeFor(w: Int, h: Int): Pair<Int, Int> {
-            val k = maxOf(1, 640 / maxOf(w, h))
-            return (w * k and 1.inv()) to (h * k and 1.inv())
+            val long = 640
+            val (vw, vh) = if (w >= h) long to long * h / w else long * w / h to long
+            return (vw and 1.inv()) to (vh and 1.inv())
         }
     }
 }

@@ -57,7 +57,7 @@ object Knobs {
         return VhsSettings(
             lumaNoise = 0.002f + 0.02f * w,
             chromaNoise = 0.02f + 0.2f * w,
-            snow = 0.00003f + 0.0008f * w,
+            snow = 0.000005f + 0.00025f * w,
             dropouts = 0.03f + 0.9f * w,
             jitterPx = 0.2f + 1.6f * w,
             headSwitchLines = 3 + (5 * w).toInt(),

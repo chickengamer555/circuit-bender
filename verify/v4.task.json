@@ -1,0 +1,35 @@
+{
+  "task": "v4",
+  "title": "Camera quality, bigger dither, overlay-in-photo option",
+  "description": "Let the user pick how good the camera is (samples per line, from a toy cam to sharp 640), dither at up to 640x480 with more palettes and a brightness knob, and choose whether the REC/date overlay is burned into photos and videos.",
+  "tier": "quick",
+  "clauses": [
+    {
+      "id": "Q1",
+      "text": "The quality setting picks how many samples each line has (160 toy cam up to 640 sharp), always at 480 lines (640 upright) and a 4:3 picture, and higher quality really keeps finer detail.",
+      "observable_by": "a test named \"quality sets samples per line and keeps detail\" passes"
+    },
+    {
+      "id": "Q2",
+      "text": "Dither goes up to 640x480 pixels, offers at least 18 colour choices including C64 and ZX Spectrum, and has a brightness knob that changes the result.",
+      "observable_by": "a test named \"dither goes bigger with more palettes and brightness\" passes"
+    },
+    {
+      "id": "Q3",
+      "text": "When the user turns 'REC & date in photos' on, the photo is exactly the filtered viewfinder picture, overlay included; when off, it has none.",
+      "observable_by": "a test named \"overlay can be kept in photos\" passes"
+    }
+  ],
+  "units": [
+    {
+      "id": "v4",
+      "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Pipeline.kt",
+      "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/V4Test.kt",
+      "cases": [
+        { "id": "quality-sets-samples-per-line-and-keeps-detail", "description": "each Quality gives width = samples (x3/4 upright), 480/640 lines, 4:3/3:4 display; a fine stripe pattern keeps more contrast at 640 than at 240", "maps_to_clause": "Q1" },
+        { "id": "dither-goes-bigger-with-more-palettes-and-brightness", "description": "pixel knob reaches 640x480 and 480x360; >= 18 palettes incl. a 16-colour C64 and 15-colour ZX Spectrum; brightness 0 vs 1 differ", "maps_to_clause": "Q2" },
+        { "id": "overlay-can-be-kept-in-photos", "description": "keepOverlay=true: photo equals viewfinder frame pixel for pixel; keepOverlay=false: photo equals the overlay-free render", "probe": true, "maps_to_clause": "Q3" }
+      ]
+    }
+  ]
+}
