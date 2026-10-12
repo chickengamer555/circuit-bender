@@ -35,6 +35,8 @@ data class BendSettings(
     val dataLines: List<DataLine> = List(8) { DataLine() },
     /** Lines that only bite on colour (U/V) bytes - see [Bus.applyChromaLines]. */
     val chromaLines: List<DataLine> = List(8) { DataLine() },
+    /** 0..1 colour fault on the YUV422 bus, built from docs/COLOUR-RESEARCH.md - see [ColourFault]. */
+    val colourFault: Float = 0f,
     val bridge: BridgeMode = BridgeMode.OFF,
     val bridgeA: Int = 6,
     val bridgeB: Int = 7,
@@ -72,7 +74,7 @@ data class BendSettings(
     val brownout: Float = 0f,
 ) {
     internal val busActive: Boolean
-        get() = dataLines.any { it.active } || chromaLines.any { it.active } || bridge != BridgeMode.OFF || crossA != crossB ||
+        get() = dataLines.any { it.active } || chromaLines.any { it.active } || colourFault > 0f || bridge != BridgeMode.OFF || crossA != crossB ||
             crosstalkBit in 0..7 || bytePhaseSlip
     internal val timingActive: Boolean get() = pixelClockPot > PCLK_KNEE || strideOffset != 0
     internal val addressActive: Boolean get() = addressMode != LineMode.OFF
@@ -286,6 +288,7 @@ class BendEngine(private val seed: Long = 1) {
                 Parallel.rows(h) { a, b ->
                     for (y in a until b) Bus.applyDataLines(bus, s.dataLines, rowRng(2, y), y * lb, (y + 1) * lb)
                 }
+                if (s.colourFault > 0f) ColourFault.apply(bus, pw, h, s.colourFault, frame, ::rowRng)
                 if (s.chromaLines.any { it.active }) {
                     Parallel.rows(h) { a, b ->
                         for (y in a until b) Bus.applyChromaLines(bus, s.chromaLines, rowRng(4, y), y * lb, (y + 1) * lb)

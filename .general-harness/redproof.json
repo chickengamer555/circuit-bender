@@ -660,6 +660,17 @@
       "contract_hash": "b49d43be6c9b8ca529e118e9e5ed77934431a18fdd8edc78ed17702c0dc55907",
       "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
       "confidence": "heuristic"
+    },
+    {
+      "task": "v8",
+      "unit": "v8",
+      "case": "colour-bend-gives-many-false-colours-not-one-tint",
+      "key": "v8/colour-bend-gives-many-false-colours-not-one-tint",
+      "matched_test": "V8Test > colour bend gives many false colours not one tint()",
+      "failed_at": "2026-10-12T21:11:56.965Z",
+      "contract_hash": "651b81c3cfcc553dde67c889b6ab3c75ca95c4de377c7eba67e5f585fdd4a0d2",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
     }
   ]
 }

@@ -8,8 +8,9 @@ object Knobs {
     /**
      * NOISE: data lines shorted through pots, sparkle growing into
      * posterisation. TEAR: the pixel-clock pot past its knee, then a lost
-     * HSYNC slant. COLOUR: pots on the chroma data lines - colour sparkle that
-     * grows steadily into solid false colour. MEMORY: an intermittent stuck frame-buffer address line -
+     * HSYNC slant. COLOUR: the researched colour fault (see [ColourFault]) -
+     * overdriven colour, brightness-locked false-colour bands, a bridge, and
+     * finally the byte slip's green shadows and magenta highlights. MEMORY: an intermittent stuck frame-buffer address line -
      * repeated blocks and ghosts of earlier frames. ROLL: lost VSYNC. BLOCKS:
      * JPEG bit errors.
      */
@@ -31,15 +32,9 @@ object Knobs {
             lines[3] = DataLine(LineMode.LOW, pot = 1f - n * 0.8f)
             lines[6] = DataLine(LineMode.HIGH, pot = 1f - n * 0.35f)
         }
-        val chroma = MutableList(8) { DataLine() }
-        if (c > 0f) {
-            chroma[6] = DataLine(LineMode.HIGH, pot = 1f - c)
-            chroma[4] = DataLine(LineMode.LOW, pot = 1f - c * 0.8f)
-            chroma[7] = DataLine(LineMode.HIGH, pot = 1f - c * 0.5f)
-        }
         return BendSettings(
             dataLines = lines,
-            chromaLines = chroma,
+            colourFault = c,
             pixelClockPot = if (t > 0f) BendSettings.PCLK_KNEE + 0.5f * t else 0f,
             strideOffset = if (t > 0.5f) ((t - 0.5f) / 0.5f * 10f).toInt() else 0,
             addressMode = if (m > 0f) LineMode.LOW else LineMode.OFF,
