@@ -1,0 +1,117 @@
+{
+  "turn": 1,
+  "verdict": "revise",
+  "stance": "tautology-hawk",
+  "method_note": "Mutation-tested a scratch copy (scratchpad/mut, project untouched). Round 1: 10 mutants applied together (FS 3<->5 swapped, JJN 7<->5 swapped, Bayer ordered spread halved, GB Camera matrix first cell 42,94,155 -> 12,34,255, VHS noise RNG ignoring frame, CameraSampler ignoring yRowStride, date/time stamp positions swapped, PCLK knee 0.5 -> 0.95, FieldError.SWAP implemented as DROP). Result: 32/32 tests green, every mutant survived. Round 2: Atkinson with zero taps (no diffusion), data-line pot curve made smoothstep, chromaDivisor 8 -> 5 all survived; sharpen 0.8 -> 0.2 was killed by 'sharpening overshoots edges'.",
+  "findings": [
+    {
+      "case_id": "dither/atkinson-drops-faint-tones",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/DitherTest.kt",
+      "line": 96,
+      "broken_impl_that_passes": "Atkinson with NO error diffusion (Kernel(8f) with no taps, i.e. plain nearest-colour threshold). A 10% grey quantises to all-black, so assertEquals(0.0, atkinson) holds. Verified: mutant survived. The probe for 'throws away a quarter of the error' is satisfied by throwing away all of it.",
+      "suggested_fix": "Add a positive Atkinson assertion: at a mid-tone (e.g. 30% or 50% grey) Atkinson's white fraction is within a few % of the input, and at ~20% grey (above the 1/8 cutoff) it is > 0 but noticeably below FS. Better still, pin the kernel: a single bright pixel's error spreads to exactly the six documented neighbours at 1/8 each."
+    },
+    {
+      "case_id": "dither/error-diffusion-preserves-average-tone",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/DitherTest.kt",
+      "line": 82,
+      "broken_impl_that_passes": "Any kernel whose weights sum to the divisor: FS as 7,5,3,1 (the classic transcription error) and JJN with 7/5 swapped both survived. Average tone on a flat field is invariant to how the error is distributed, so the published weights (RESEARCH 3.2, tagged [S]) are never checked. Burkes and Sierra Lite are not tone-tested at all.",
+      "suggested_fix": "Pin each kernel directly: dither a 5x3 image that is 0 except one pixel of value v at a known spot, on a wide-range buffer (or expose the kernel taps) and assert the exact error distribution; or golden-compare a small fixed input's output per algorithm. Include BURKES and SIERRA_LITE."
+    },
+    {
+      "case_id": "dither/bayer4-half-grey-is-half-white",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/DitherTest.kt",
+      "line": 67,
+      "broken_impl_that_passes": "Threshold offset scaled wrong (spread halved - survived), centring term dropped, or the matrix indexed transposed: any offset symmetric about the midpoint puts exactly 8/16 cells above 127.5 at grey 128. 'bayer matrices match the published values' checks only the generator function, not how ordered() applies it; BAYER_2, BAYER_8 and CLUSTER_DOT get no tone test.",
+      "suggested_fix": "Test grey levels off the midpoint: for k in 1..15, flat grey (k*255/16) through BAYER_4 on 1-bit gives exactly k whites per tile AND the white cells are exactly those with M4 index >= 16-k (pins scale, centring and orientation). Same for BAYER_2 (4 levels) and BAYER_8."
+    },
+    {
+      "case_id": "dither/output-uses-only-palette-colours",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/DitherTest.kt",
+      "line": 34,
+      "broken_impl_that_passes": "GAME_BOY_CAMERA with a corrupted threshold matrix (first cell changed to 12,34,255 - survived) or any matrix at all; the only test touching this algorithm is palette membership. The Boichot 48-byte matrix from RESEARCH 3.4 is unpinned. Also: a colour-palette path that maps every pixel to colors[0] passes this test - no test checks colour matching quality.",
+      "suggested_fix": "Assert Dither.GAME_BOY_CAMERA_MATRIX equals the RESEARCH 3.4 table, and that a flat luma just below/above r0,r1,r2 of a given cell yields shade 0/1/2/3 at that cell. For colour palettes, assert each palette colour fed in as a flat image comes back unchanged under every algorithm."
+    },
+    {
+      "case_id": "vhs/tape-noise-is-animated-but-reproducible",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/VhsTest.kt",
+      "line": 130,
+      "broken_impl_that_passes": "Tape noise frozen across frames (noise RNG seeded without frame - survived). f1 != f2 is still true because jitter phase and head-switch bounce depend on frame, so the test cannot tell whether noise/snow/dropouts animate.",
+      "suggested_fix": "Run per-artifact: settings with only lumaNoise on (jitter, head switch, snow, dropouts off) must differ between frames 1 and 2 and match on repeat; repeat for chromaNoise, snow and jitter."
+    },
+    {
+      "case_id": "pipeline/camera-frames-are-downsampled-upright",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/PipelineTest.kt",
+      "line": 323,
+      "broken_impl_that_passes": "Sampler that ignores yRowStride and uses width (survived). The marker is a large block probed near its centre and stride drift is small near the top rows, so 'padded row strides' in the case description is not actually exercised. Box averaging is also unverified (nearest-neighbour passes), and over-cropping passes the 16:9 check.",
+      "suggested_fix": "Put a small marker (e.g. 8x8 sensor px = 2x2 output px) in the BOTTOM-right of the sensor frame where stride errors accumulate, fill the padding bytes with a contrasting value (e.g. 255) so reading padding shows up, and assert a 50% checkerboard averages to mid-grey (box filter). For the crop, also assert a marker just inside the 4:3 window survives."
+    },
+    {
+      "case_id": "osd/overlay-elements-land-in-their-corners",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/OsdTest.kt",
+      "line": 224,
+      "broken_impl_that_passes": "Date and time positions swapped (time bottom-right, date bottom-left) - survived. The assertion counts any white pixels in the bottom-right quadrant, which the time string satisfies equally.",
+      "suggested_fix": "Render Stamp.date alone via drawText into a blank buffer at the expected x (width - mx - textWidth) and compare that region, or assert the bottom-right white-pixel count equals the glyph pixel count of the date string at scale 2."
+    },
+    {
+      "case_id": "bend/pixel-clock-pot-has-a-knee",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/BendTest.kt",
+      "line": 227,
+      "broken_impl_that_passes": "Knee moved to 0.95 (survived): only pot=0.3 and pot=1.0 are probed. Also 'tears lines sideways' is checked as 'row differs at all', so replacing rows with noise passes.",
+      "suggested_fix": "Probe just below and just above PCLK_KNEE (e.g. 0.45 -> 0 rows, 0.7 -> some but fewer than at 1.0), and assert each torn row equals the source row shifted right by a positive integer (contents preserved, displaced)."
+    },
+    {
+      "case_id": "bend/every-control-changes-the-picture",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/BendTest.kt",
+      "line": 315,
+      "broken_impl_that_passes": "FieldError.SWAP implemented as DROP (survived); likewise NEON as NEGATIVE, crosstalk as random XOR, byte-phase slip as any permutation, brownout as any dimming. 'Changed something, >=16 colours, opaque, reproducible' is all B6 asks, so this is contract-faithful, but the research mechanics for these 9 controls have zero pinned semantics.",
+      "suggested_fix": "Cheap exact checks for the deterministic ones: SWAP on rows [a,b,c,d] gives [b,a,d,c] and DROP gives [a,a,c,c]; byte-phase slip on a grey ramp makes Y read the U byte (neighbour sample's chroma 128); crosstalk with period p flips bit n exactly on samples where (sample>>p)&1==1."
+    },
+    {
+      "case_id": "bend/stuck-data-line-forces-the-bit-through-the-pot",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/BendTest.kt",
+      "line": 182,
+      "broken_impl_that_passes": "Any pot curve symmetric through (0.5, 0.5) e.g. smoothstep (survived); 'in proportion to the pot' is checked at one point.",
+      "suggested_fix": "Also assert pot 0.25 flips ~75% and pot 0.75 flips ~25% of eligible bytes (+-5%)."
+    },
+    {
+      "case_id": "vhs/chroma-is-eight-times-softer-than-luma",
+      "file": "core/src/test/kotlin/com/chickengamer/circuitbender/core/VhsTest.kt",
+      "line": 57,
+      "broken_impl_that_passes": "chromaDivisor 5 (~64 chroma samples/line instead of ~40) survived. The >=6 px / <=3 px / ratio >=2.5 thresholds match the contract case text, so this is a contract-looseness issue rather than a test defect; 'about one eighth' is not pinned.",
+      "suggested_fix": "Tighten to a band consistent with 40 samples at 320 px (e.g. chroma 10-90% rise between 7 and 14 px) or assert VhsSettings().chromaDivisor == 8 alongside the behavioural check."
+    },
+    {
+      "case_id": "vhs/tiny-frames-are-safe",
+      "file": "verify/turns/verification_t1.json",
+      "line": 1032,
+      "broken_impl_that_passes": "Not an implementation issue: the red proof for vhs/tiny-frames-are-safe records matched_test 'odd and tiny frames are safe()' - the BendTest name. The VhsTest method is 'tiny frames are safe()'. The heuristic matcher substring-matched across units, so this case's red proof is evidence of a Bend failure, not the VHS test. The gate lists it as proven, not stale/weak.",
+      "suggested_fix": "Re-record the VHS proof against VhsTest.'tiny frames are safe()' (class-qualified match), or rename one of the two tests so names are unique across the suite."
+    }
+  ],
+  "solid_tests": [
+    "bend/neutral-rack-is-a-perfect-bypass: exact content equality plus input-not-mutated over 3 frames.",
+    "bend/bridged-and-crossed-lines-rewire-bits: exact byte vectors for AND, OR and swap; only Bus-level, but values are hand-derivable and correct.",
+    "bend/hsync-loss-rewraps-lines-at-the-wrong-stride: exact formula y*(W+d)+x mod W*H for d=+3 and -2 (even width only).",
+    "bend/vsync-loss-rolls-with-a-blanking-bar: pins direction (down) and speed (5 rows/frame) plus a black bar.",
+    "bend/stuck-address-line-repeats-blocks-and-leaves-stale-frames: pins byte-address semantics (bit 6 = 64 bytes = 2 rows), duplication and stale previous-frame data for both LOW and HIGH. Good research fidelity.",
+    "dither/bayer-matrices-match-the-published-values: generator pinned for 2x2, 4x4 exactly and 8x8 row 0 + permutation.",
+    "osd/stamps-are-formatted-like-a-camcorder: exact strings incl. midnight, noon, single-digit day/hour, negative counter.",
+    "pipeline/photo-is-the-viewfinder-frame-scaled-up: exhaustive per-pixel equality.",
+    "vhs/ccd-smears-bright-points-vertically and vhs/head-switching-band-sits-at-the-bottom: localisation is exact (row-by-row equality above the band; column vs neighbours, above and below).",
+    "vhs/sharpening-overshoots-edges: killed the sharpen 0.8 -> 0.2 mutant."
+  ],
+  "perf_guard_judgement": "Warm-up 20 -> 100 is a defensible, disclosed measurement change and not what makes the test green: my probe in the scratch copy measured median 16.9 ms after 20 warm-up frames vs 17.5 ms after 100 (12-core desktop). The real concern is margin: ~17 ms against a 20 ms bound, achieved with Parallel using 6 threads, so the guard is close to flaky under CI load and does not demonstrate 'headroom for a phone'.",
+  "gaps_the_gate_cannot_see": [
+    "Every research value tagged [S] in the TL;DR sheet that has a direct code constant - FS/JJN/Stucki/Sierra/Burkes/Sierra-Lite weights, the GB Camera 48-byte matrix, the cluster-dot matrix - can be changed without any test going red (D2/D3; verified by surviving mutants).",
+    "D2's ordered dither is only probed at the one grey level (128) where every symmetric threshold scale gives 8/16, so the (M+0.5)/n^2-0.5 * 255/(N-1) application rule in RESEARCH 3.1 is untested.",
+    "D3's Atkinson probe is satisfied by doing no diffusion at all; the 'six cells x 1/8' kernel is unverified.",
+    "Colour (non-monochrome) palette matching is only tested for membership; a mapping to the wrong palette colour is invisible (affects PICO-8/CGA/EGA used in the app).",
+    "V4 'noise moves frame to frame' is only tested in aggregate; jitter and head-switch bounce mask frozen noise/snow/dropouts.",
+    "P1 'padded row strides' and 'averaged down' are named in the case description but not actually exercised.",
+    "B6 controls other than data lines, bridge, cross, stride, pclk, vsync, address and bayer have no semantic test (field swap/drop, byte slip, crosstalk period, SCCB modes, JPEG MCU desync, brownout freeze/half-frame).",
+    "The red-proof matcher is name-substring based: vhs/tiny-frames-are-safe is recorded against the BendTest method. With all proofs at 'heuristic' confidence and the test leg 'exit-code-only', per-case redness is not actually established anywhere.",
+    "Perf guard runs at ~85% of its bound on a 12-core desktop using 6 worker threads; P4's phone-headroom claim is unobservable from this test."
+  ],
+  "highest_impact_change": "Add exact-value kernel/threshold pins to DitherTest - a single-pixel error-spread check for every diffusion kernel (incl. Atkinson's six 1/8 taps, so the no-diffusion stub fails), a k/16-grey sweep for BAYER_4 asserting which cells are white, and an equality check of GAME_BOY_CAMERA_MATRIX against RESEARCH 3.4 - since five surviving mutants show the published [S] values are currently unprotected."
+}

@@ -31,12 +31,54 @@
       "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Dither.kt",
       "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/DitherTest.kt",
       "cases": [
-        { "id": "output-uses-only-palette-colours", "description": "random noise image through every algorithm x several palettes", "maps_to_clause": "D1" },
-        { "id": "bayer-matrices-match-the-published-values", "description": "2x2, 4x4 and 8x8 index matrices equal the recursive Bayer definition", "maps_to_clause": "D2" },
-        { "id": "bayer4-half-grey-is-half-white", "description": "flat grey 128 on a 1-bit palette gives exactly 8 of every 16 pixels white", "maps_to_clause": "D2" },
-        { "id": "error-diffusion-preserves-average-tone", "description": "flat 30% grey through FS, JJN, Stucki, Sierra gives 30% white within 2%", "maps_to_clause": "D3" },
-        { "id": "atkinson-drops-faint-tones", "description": "flat 10% grey: Atkinson yields no white pixels while Floyd-Steinberg yields about 10%", "probe": true, "maps_to_clause": "D3" },
-        { "id": "degenerate-inputs-are-safe", "description": "0x0, 1x1, pure black and pure white frames", "probe": true, "maps_to_clause": "D4" }
+        {
+          "id": "output-uses-only-palette-colours",
+          "description": "random noise image through every algorithm x several palettes",
+          "maps_to_clause": "D1"
+        },
+        {
+          "id": "bayer-matrices-match-the-published-values",
+          "description": "2x2, 4x4 and 8x8 index matrices equal the recursive Bayer definition",
+          "maps_to_clause": "D2"
+        },
+        {
+          "id": "bayer4-half-grey-is-half-white",
+          "description": "flat grey 128 on a 1-bit palette gives exactly 8 of every 16 pixels white",
+          "maps_to_clause": "D2"
+        },
+        {
+          "id": "error-diffusion-preserves-average-tone",
+          "description": "flat 30% grey through FS, JJN, Stucki, Sierra gives 30% white within 2%",
+          "maps_to_clause": "D3"
+        },
+        {
+          "id": "atkinson-drops-faint-tones",
+          "description": "flat 10% grey: Atkinson yields no white pixels while Floyd-Steinberg yields about 10%",
+          "probe": true,
+          "maps_to_clause": "D3"
+        },
+        {
+          "id": "degenerate-inputs-are-safe",
+          "description": "0x0, 1x1, pure black and pure white frames",
+          "probe": true,
+          "maps_to_clause": "D4"
+        },
+        {
+          "id": "error-diffusion-matches-published-kernels",
+          "description": "every diffusion kernel matches an independent textbook implementation built from the published weights in RESEARCH 3.2 (catches swapped or wrong weights that average tone cannot)",
+          "maps_to_clause": "D3"
+        },
+        {
+          "id": "bayer4-grey-sweep-lights-cells-in-matrix-order",
+          "description": "for each level k/16, exactly the cells with index >= 16-k turn white (pins the (M+0.5)/n^2-0.5 rule and the spread)",
+          "maps_to_clause": "D2"
+        },
+        {
+          "id": "game-boy-camera-thresholds-match-research",
+          "description": "at every one of the 16 cells, values just below and at r0, r1, r2 land on the right shade (the real 48-byte matrix)",
+          "probe": true,
+          "maps_to_clause": "D2"
+        }
       ]
     }
   ]

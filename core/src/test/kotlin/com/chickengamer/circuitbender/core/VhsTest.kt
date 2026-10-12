@@ -54,7 +54,9 @@ class VhsTest {
         val h = 6
         val colour = Vhs.process(split(w, h, rgb(200, 40, 40), rgb(40, 40, 200)), w, h, clean, seed = 1, frame = 0)
         val chromaWidth = riseWidth(row(colour, w, 3, ::v))
-        assertTrue(chromaWidth >= 6.0, "colour edge should spread >= 6 px, was $chromaWidth")
+        // 8 luma px per chroma sample (320/40) plus the chroma low-pass: a
+        // finer divisor such as 5 gives ~11 px and must fail.
+        assertTrue(chromaWidth >= 12.0, "colour edge should spread >= 12 px, was $chromaWidth")
 
         val mono = Vhs.process(split(w, h, grey(30), grey(220)), w, h, clean, seed = 1, frame = 0)
         val lumaWidth = riseWidth(row(mono, w, 3, ::y))
@@ -123,7 +125,9 @@ class VhsTest {
         val w = 64
         val h = 48
         val src = IntArray(w * h) { grey(120) }
-        val s = VhsSettings()
+        // Jitter and head switching move between frames on their own, so turn
+        // them off: only the tape noise itself can make these frames differ.
+        val s = VhsSettings().copy(jitterPx = 0f, headSwitchLines = 0, dropouts = 0f, snow = 0f)
         val f1 = Vhs.process(src, w, h, s, seed = 11, frame = 1)
         val f2 = Vhs.process(src, w, h, s, seed = 11, frame = 2)
         val f1again = Vhs.process(src, w, h, s, seed = 11, frame = 1)

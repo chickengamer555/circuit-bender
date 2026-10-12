@@ -31,11 +31,33 @@
       "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Osd.kt",
       "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/OsdTest.kt",
       "cases": [
-        { "id": "stamps-are-formatted-like-a-camcorder", "description": "fixed date/time and counter values give exact strings, including single-digit days and midnight/noon", "probe": true, "maps_to_clause": "O1" },
-        { "id": "text-is-outlined-block-glyphs", "description": "every overlay character has a non-empty glyph except space; a drawn letter has white pixels each touching black outline", "maps_to_clause": "O2" },
-        { "id": "overlay-elements-land-in-their-corners", "description": "red pixels only top-left, date-stamp pixels in the bottom-right quadrant", "maps_to_clause": "O3" },
-        { "id": "overlay-can-be-restricted-to-palette-colours", "description": "with a palette given, every overlay pixel is a palette colour", "maps_to_clause": "O3" },
-        { "id": "overlay-clips-in-tiny-frames", "description": "1x1 and 10x4 frames", "probe": true, "maps_to_clause": "O4" }
+        {
+          "id": "stamps-are-formatted-like-a-camcorder",
+          "description": "fixed date/time and counter values give exact strings, including single-digit days and midnight/noon",
+          "probe": true,
+          "maps_to_clause": "O1"
+        },
+        {
+          "id": "text-is-outlined-block-glyphs",
+          "description": "every overlay character has a non-empty glyph except space; a drawn letter has white pixels each touching black outline",
+          "maps_to_clause": "O2"
+        },
+        {
+          "id": "overlay-elements-land-in-their-corners",
+          "description": "red pixels only top-left; the bottom half of the stamp equals the date string drawn alone bottom-right plus the time drawn alone bottom-left (catches swapped corners)",
+          "maps_to_clause": "O3"
+        },
+        {
+          "id": "overlay-can-be-restricted-to-palette-colours",
+          "description": "with a palette given, every overlay pixel is a palette colour",
+          "maps_to_clause": "O3"
+        },
+        {
+          "id": "overlay-clips-in-tiny-frames",
+          "description": "1x1 and 10x4 frames",
+          "probe": true,
+          "maps_to_clause": "O4"
+        }
       ]
     }
   ]

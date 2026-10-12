@@ -77,6 +77,23 @@ class OsdTest {
         assertTrue(br > 40, "date stamp pixels bottom-right ($br)")
         val topLeftText = (0 until h / 4).sumOf { y -> (0 until w / 4).count { x -> px[y * w + x] == white } }
         assertTrue(topLeftText > 10, "REC text top-left ($topLeftText)")
+
+        // The date is the bottom-right text and the time the bottom-left one,
+        // not the other way round: compare against each string drawn alone.
+        val st = state()
+        val stamp = IntArray(w * h) { mid }
+        Osd.drawStamp(stamp, w, h, st)
+        val sc = Osd.scaleFor(h)
+        val y0 = h - h * 8 / 100 - Font5x7.HEIGHT * sc
+        val dateOnly = IntArray(w * h) { mid }
+        val date = Stamp.date(st.dateTime)
+        Osd.drawText(dateOnly, w, h, date, w - w * 8 / 100 - Osd.textWidth(date, sc), y0, white, black, sc)
+        val timeOnly = IntArray(w * h) { mid }
+        Osd.drawText(timeOnly, w, h, Stamp.time(st.dateTime), w * 8 / 100, y0, white, black, sc)
+        for (y in h / 2 until h) for (x in 0 until w) {
+            val expected = if (x >= w / 2) dateOnly[y * w + x] else timeOnly[y * w + x]
+            assertEquals(expected, stamp[y * w + x], "stamp pixel $x,$y")
+        }
     }
 
     @Test

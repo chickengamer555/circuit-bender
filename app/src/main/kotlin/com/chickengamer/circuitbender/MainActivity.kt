@@ -12,9 +12,11 @@ import android.hardware.SensorManager
 import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.BatteryManager
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -75,10 +77,23 @@ class MainActivity : ComponentActivity() {
     private lateinit var lastPhoto: TextView
     private var lastUri: Uri? = null
     private var panel: View? = null
-    private var torch = false
 
     private val askCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) feed.start() else Toast.makeText(this, "Camera permission is needed to film", Toast.LENGTH_LONG).show()
+        if (granted) {
+            viewfinder.message = null
+            feed.start()
+        } else {
+            viewfinder.message = "NO CAMERA PERMISSION - TAP TO RETRY"
+        }
+    }
+
+    /** Android 8-9 only: shared Pictures needs the storage permission at runtime. */
+    private val askStorage = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            captureRequested.set(true)
+        } else {
+            Toast.makeText(this, "Storage permission is needed to save photos", Toast.LENGTH_LONG).show()
+        }
     }
 
     private val lightListener = object : SensorEventListener {
@@ -95,7 +110,7 @@ class MainActivity : ComponentActivity() {
         override fun onDisplayAdded(id: Int) {}
         override fun onDisplayRemoved(id: Int) {}
         override fun onDisplayChanged(id: Int) {
-            display?.rotation?.let { feed.setRotation(it) }
+            feed.setRotation(displayRotation())
         }
     }
 
@@ -115,12 +130,40 @@ class MainActivity : ComponentActivity() {
         root.addView(leftColumn(), FrameLayout.LayoutParams(Retro.dp(this, 112f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START))
         setContentView(root)
 
-        feed = CameraFeed(this, ::onFrame)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+        feed = CameraFeed(this, ::displayRotation, { msg -> runOnUiThread { viewfinder.message = msg } }, ::onFrame)
+        viewfinder.setOnClickListener {
+            if (!feed.running && !granted(Manifest.permission.CAMERA)) askCamera.launch(Manifest.permission.CAMERA)
+        }
+        if (granted(Manifest.permission.CAMERA)) {
             feed.start()
         } else {
             askCamera.launch(Manifest.permission.CAMERA)
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        feed.shutdown()
+        io.shutdown()
+    }
+
+    private fun granted(permission: String) =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    private fun displayRotation(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        display?.rotation ?: Surface.ROTATION_0
+    } else {
+        @Suppress("DEPRECATION") // Activity.display is API 30+
+        windowManager.defaultDisplay.rotation
+    }
+
+    private fun shoot() {
+        if (!feed.running) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && !granted(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+            askStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
+        captureRequested.set(true)
     }
 
     override fun onResume() {
@@ -128,6 +171,8 @@ class MainActivity : ComponentActivity() {
         val sm = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         sm.getDefaultSensor(Sensor.TYPE_LIGHT)?.let { sm.registerListener(lightListener, it, SensorManager.SENSOR_DELAY_UI) }
         (getSystemService(Context.DISPLAY_SERVICE) as DisplayManager).registerDisplayListener(displayListener, null)
+        // The phone may have been turned over while we were in the background.
+        feed.setRotation(displayRotation())
         val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val pct = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         battery = when {
@@ -225,14 +270,8 @@ class MainActivity : ComponentActivity() {
         add(Retro.toggle(this, "VHS", settings.vhsEnabled, Retro.CYAN) { on -> update { it.copy(vhsEnabled = on) } })
         add(Retro.cycle(this, "", Resolution.entries, settings.resolution, { it.label.substringBefore(' ') }) { r -> update { it.copy(resolution = r) } })
         add(Retro.cycle(this, "TAPE", listOf("SP", "LP", "EP"), tapeSpeed) { tapeSpeed = it })
-        add(Retro.toggle(this, "LIGHT", false, Retro.AMBER) { on ->
-            torch = on
-            feed.setTorch(on)
-        })
-        add(Retro.button(this, "FLIP") {
-            feed.flip()
-            if (torch) feed.setTorch(true)
-        })
+        add(Retro.toggle(this, "LIGHT", false, Retro.AMBER) { on -> feed.setTorch(on) })
+        add(Retro.button(this, "FLIP") { feed.flip() })
 
         val shutter = TextView(this).apply {
             text = "●"
@@ -240,7 +279,7 @@ class MainActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             setTextColor(Retro.RED)
             background = Retro.frame(this@MainActivity, Retro.RED, false)
-            setOnClickListener { captureRequested.set(true) }
+            setOnClickListener { shoot() }
         }
         col.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
         col.addView(shutter, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Retro.dp(this, 84f)))

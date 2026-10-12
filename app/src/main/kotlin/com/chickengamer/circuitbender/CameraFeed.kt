@@ -13,6 +13,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.chickengamer.circuitbender.core.YuvPlanes
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 
 /**
@@ -21,12 +22,18 @@ import java.util.concurrent.Executors
  */
 class CameraFeed(
     private val activity: ComponentActivity,
+    private val rotation: () -> Int,
+    private val onError: (String) -> Unit,
     private val onFrame: (YuvPlanes, rotationDegrees: Int) -> Unit,
 ) {
     private val executor = Executors.newSingleThreadExecutor()
     private var analysis: ImageAnalysis? = null
     private var camera: Camera? = null
+    private var torch = false
     var lensFacing = CameraSelector.LENS_FACING_BACK
+        private set
+
+    @Volatile var running = false
         private set
 
     // Reused plane copies; only the analyzer thread touches them.
@@ -37,54 +44,78 @@ class CameraFeed(
     fun start() {
         val future = ProcessCameraProvider.getInstance(activity)
         future.addListener({
-            val provider = future.get()
-            val selector = ResolutionSelector.Builder()
-                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-                .setResolutionStrategy(
-                    ResolutionStrategy(Size(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
-                )
-                .build()
-            val a = ImageAnalysis.Builder()
-                .setResolutionSelector(selector)
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
-                .build()
-            a.targetRotation = activity.display?.rotation ?: 0
-            a.setAnalyzer(executor) { image -> image.use { deliver(it) } }
-            provider.unbindAll()
-            try {
-                camera = provider.bindToLifecycle(
-                    activity,
-                    CameraSelector.Builder().requireLensFacing(lensFacing).build(),
-                    a,
-                )
-                analysis = a
-            } catch (e: IllegalArgumentException) {
-                // No camera on this side (e.g. no front camera): fall back to the other.
-                Log.w(TAG, "lens $lensFacing unavailable", e)
-                if (lensFacing == CameraSelector.LENS_FACING_FRONT) {
-                    lensFacing = CameraSelector.LENS_FACING_BACK
-                    start()
-                }
+            val provider = try {
+                future.get()
+            } catch (e: ExecutionException) {
+                Log.e(TAG, "camera provider failed", e)
+                onError("CAMERA UNAVAILABLE")
+                return@addListener
             }
+            if (activity.isDestroyed) return@addListener
+            bind(provider, triedOther = false)
         }, ContextCompat.getMainExecutor(activity))
     }
 
-    fun flip() {
-        lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
-            CameraSelector.LENS_FACING_FRONT
-        } else {
-            CameraSelector.LENS_FACING_BACK
+    private fun bind(provider: ProcessCameraProvider, triedOther: Boolean) {
+        val selector = ResolutionSelector.Builder()
+            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+            .setResolutionStrategy(
+                ResolutionStrategy(Size(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
+            )
+            .build()
+        val a = ImageAnalysis.Builder()
+            .setResolutionSelector(selector)
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+            .build()
+        a.targetRotation = rotation()
+        a.setAnalyzer(executor) { image -> image.use { deliver(it) } }
+        provider.unbindAll()
+        try {
+            camera = provider.bindToLifecycle(
+                activity,
+                CameraSelector.Builder().requireLensFacing(lensFacing).build(),
+                a,
+            )
+            analysis = a
+            running = true
+            camera?.cameraControl?.enableTorch(torch)
+        } catch (e: IllegalArgumentException) {
+            // No camera on this side: try the other one once.
+            Log.w(TAG, "lens $lensFacing unavailable", e)
+            if (!triedOther) {
+                lensFacing = other(lensFacing)
+                bind(provider, triedOther = true)
+            } else {
+                running = false
+                onError("NO CAMERA")
+            }
+        } catch (e: IllegalStateException) {
+            // The activity was torn down while CameraX was starting.
+            Log.w(TAG, "bind after destroy", e)
         }
+    }
+
+    private fun other(lens: Int) =
+        if (lens == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
+
+    fun flip() {
+        lensFacing = other(lensFacing)
         start()
     }
 
+    /** Remembered across rebinds, so the light stays on after FLIP. */
     fun setTorch(on: Boolean) {
+        torch = on
         camera?.cameraControl?.enableTorch(on)
     }
 
     fun setRotation(rotation: Int) {
         analysis?.targetRotation = rotation
+    }
+
+    fun shutdown() {
+        executor.shutdown()
     }
 
     private fun deliver(image: ImageProxy) {
@@ -104,7 +135,13 @@ class CameraFeed(
             uvRowStride = p[1].rowStride,
             uvPixelStride = p[1].pixelStride,
         )
-        onFrame(planes, image.imageInfo.rotationDegrees)
+        try {
+            onFrame(planes, image.imageInfo.rotationDegrees)
+        } catch (e: RuntimeException) {
+            // One bad frame must not take the whole camera down; log it and
+            // carry on with the next.
+            Log.e(TAG, "frame processing failed", e)
+        }
     }
 
     private fun copy(buffer: java.nio.ByteBuffer, reuse: ByteArray): ByteArray {

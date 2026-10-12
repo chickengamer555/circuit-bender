@@ -27,11 +27,11 @@ tasks.test {
         events("failed")
         exceptionFormat = TestExceptionFormat.SHORT
     }
-    // One "FAILED <test name>" line per failure so general-verify can map
+    // One "FAILED <TestClass> > <test name>" line per failure so general-verify can map
     // failures back to contract cases.
     afterTest(KotlinClosure2<TestDescriptor, TestResult, Unit>({ desc, result ->
         if (result.resultType == TestResult.ResultType.FAILURE) {
-            println("FAILED ${desc.displayName}")
+            println("FAILED ${desc.className?.substringAfterLast('.')} > ${desc.displayName}")
         }
     }))
 }

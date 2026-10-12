@@ -65,11 +65,14 @@ class BendTest {
         Bus.applyDataLines(low, lines(0 to DataLine(LineMode.LOW, pot = 0f)), Random(1))
         assertTrue(low.all { it.toInt() and 1 == 0 }, "D0 tied low clears bit 0 everywhere")
 
-        val half = bytes.copyOf()
-        Bus.applyDataLines(half, lines(7 to DataLine(LineMode.HIGH, pot = 0.5f)), Random(1))
+        // The chance of forcing the bit falls linearly as the pot opens.
         val eligible = bytes.indices.filter { bytes[it].toInt() and 0x80 == 0 }
-        val flipped = eligible.count { half[it].toInt() and 0x80 != 0 }.toDouble() / eligible.size
-        assertEquals(0.5, flipped, 0.05, "pot halfway flips about half the eligible bytes")
+        for (pot in floatArrayOf(0.25f, 0.5f, 0.75f)) {
+            val partial = bytes.copyOf()
+            Bus.applyDataLines(partial, lines(7 to DataLine(LineMode.HIGH, pot = pot)), Random(1))
+            val flipped = eligible.count { partial[it].toInt() and 0x80 != 0 }.toDouble() / eligible.size
+            assertEquals(1.0 - pot, flipped, 0.05, "pot $pot forces the bit on about ${1 - pot} of eligible bytes")
+        }
     }
 
     @Test
@@ -115,6 +118,8 @@ class BendTest {
             }
         }
         assertEquals(0, shiftedRows(0.3f), "below the knee the clock still makes every edge")
+        assertEquals(0, shiftedRows(0.45f), "just below the knee: still clean")
+        assertTrue(shiftedRows(0.65f) >= 1, "just past the knee lines start to slip")
         assertTrue(shiftedRows(1f) > h / 4, "fully turned, many lines tear")
     }
 
@@ -229,5 +234,23 @@ class BendTest {
             }
         }
         assertEquals(0, BendEngine(1).process(IntArray(0), 0, 0, everything, 0).size)
+    }
+
+    @Test
+    fun `field errors swap or drop lines`() {
+        val w = 6
+        val h = 8
+        val src = greyRamp(w, h)
+        fun row(px: IntArray, y: Int) = px.copyOfRange(y * w, y * w + w)
+        val swapped = BendEngine(1).process(src, w, h, BendSettings(fieldError = FieldError.SWAP), 0)
+        val dropped = BendEngine(1).process(src, w, h, BendSettings(fieldError = FieldError.DROP), 0)
+        for (y in 0 until h step 2) {
+            // SWAP: the two fields trade places line for line.
+            assertContentEquals(row(src, y + 1), row(swapped, y), "swap row $y")
+            assertContentEquals(row(src, y), row(swapped, y + 1), "swap row ${y + 1}")
+            // DROP: one field is lost and the other is line-doubled.
+            assertContentEquals(row(src, y), row(dropped, y), "drop row $y")
+            assertContentEquals(row(src, y), row(dropped, y + 1), "drop row ${y + 1}")
+        }
     }
 }

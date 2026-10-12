@@ -341,6 +341,17 @@
       "contract_hash": "c8aecba0313807f8bd6d3d008072da0cbe07f0621e684593479827ab083e4b8d",
       "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
       "confidence": "heuristic"
+    },
+    {
+      "task": "dither",
+      "unit": "dither",
+      "case": "game-boy-camera-thresholds-match-research",
+      "key": "dither/game-boy-camera-thresholds-match-research",
+      "matched_test": "DitherTest > game boy camera thresholds match research()",
+      "failed_at": "2026-10-12T10:47:02.519Z",
+      "contract_hash": "f8acaff137268e7f9acee93f14236672647065a7d90a94d6eb47bfaac11d942b",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
     }
   ]
 }

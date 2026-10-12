@@ -312,7 +312,10 @@ object Dither {
         val levels = p.colors.size
         for (y in 0 until h) for (x in 0 until w) {
             val cell = ((y and 3) * 4 + (x and 3)) * 3
-            val v = luma(src[y * w + x])
+            // The cartridge compares 8-bit ADC readings, so compare integers:
+            // a float luma of 185.99998 must not miss a threshold of 186.
+            val c = src[y * w + x]
+            val v = (77 * ((c shr 16) and 0xFF) + 150 * ((c shr 8) and 0xFF) + 29 * (c and 0xFF) + 128) shr 8
             val m = GAME_BOY_CAMERA_MATRIX
             val shade = when {
                 v < m[cell] -> 0

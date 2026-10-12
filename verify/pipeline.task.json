@@ -33,7 +33,7 @@
       "cases": [
         {
           "id": "camera-frames-are-downsampled-upright",
-          "description": "synthetic Y/U/V planes with a marker in one corner, at rotations 0/90/180/270, interleaved chroma (pixelStride 2) and padded row strides",
+          "description": "synthetic Y/U/V planes with a marker in one corner, at rotations 0/90/180/270, interleaved chroma (pixelStride 2), row padding filled with bright garbage that must never be sampled, and a 40/200 checkerboard that must box-average to mid-grey",
           "probe": true,
           "maps_to_clause": "P1"
         },

@@ -41,16 +41,64 @@
       "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Bend.kt",
       "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/BendTest.kt",
       "cases": [
-        { "id": "neutral-rack-is-a-perfect-bypass", "description": "default BendSettings returns a frame equal to the input", "probe": true, "maps_to_clause": "B1" },
-        { "id": "stuck-data-line-forces-the-bit-through-the-pot", "description": "D7 high with pot shorted sets bit 7 on every byte; pot open changes nothing; pot halfway affects about half the eligible bytes", "maps_to_clause": "B2" },
-        { "id": "bridged-and-crossed-lines-rewire-bits", "description": "known bytes through AND bridge, OR bridge and a swap of two lines give exact expected values", "maps_to_clause": "B2" },
-        { "id": "hsync-loss-rewraps-lines-at-the-wrong-stride", "description": "stride +d reads row y from stream position y*(W+d)", "maps_to_clause": "B3" },
-        { "id": "pixel-clock-pot-has-a-knee", "description": "pot below the knee leaves every line in place, pot fully turned shifts many lines", "probe": true, "maps_to_clause": "B3" },
-        { "id": "vsync-loss-rolls-with-a-blanking-bar", "description": "the picture moves down frame to frame and contains black blanking rows", "maps_to_clause": "B3" },
-        { "id": "stuck-address-line-repeats-blocks-and-leaves-stale-frames", "description": "address bit stuck low duplicates the following block; stuck high leaves a region holding the previous frame", "maps_to_clause": "B4" },
-        { "id": "bayer-phase-error-swaps-colour-channels", "description": "a flat red frame turns green with phase (1,0) and blue with (1,1)", "maps_to_clause": "B5" },
-        { "id": "every-control-changes-the-picture", "description": "each control engaged alone changes a test chart, and repeated runs with the same seed are identical", "maps_to_clause": "B6" },
-        { "id": "odd-and-tiny-frames-are-safe", "description": "1x1, 3x1, 1x5 and 7x3 frames with every control engaged", "probe": true, "maps_to_clause": "B6" }
+        {
+          "id": "neutral-rack-is-a-perfect-bypass",
+          "description": "default BendSettings returns a frame equal to the input",
+          "probe": true,
+          "maps_to_clause": "B1"
+        },
+        {
+          "id": "stuck-data-line-forces-the-bit-through-the-pot",
+          "description": "D7 high with pot shorted sets bit 7 on every byte; pot open changes nothing; at pot 0.25/0.5/0.75 the bit is forced on 75/50/25% of eligible bytes (linear)",
+          "maps_to_clause": "B2"
+        },
+        {
+          "id": "bridged-and-crossed-lines-rewire-bits",
+          "description": "known bytes through AND bridge, OR bridge and a swap of two lines give exact expected values",
+          "maps_to_clause": "B2"
+        },
+        {
+          "id": "hsync-loss-rewraps-lines-at-the-wrong-stride",
+          "description": "stride +d reads row y from stream position y*(W+d)",
+          "maps_to_clause": "B3"
+        },
+        {
+          "id": "pixel-clock-pot-has-a-knee",
+          "description": "pot at 0.3 and 0.45 (below the 0.5 knee) leaves every line in place; just past it (0.65) lines start to slip; fully turned shifts many lines",
+          "probe": true,
+          "maps_to_clause": "B3"
+        },
+        {
+          "id": "vsync-loss-rolls-with-a-blanking-bar",
+          "description": "the picture moves down frame to frame and contains black blanking rows",
+          "maps_to_clause": "B3"
+        },
+        {
+          "id": "stuck-address-line-repeats-blocks-and-leaves-stale-frames",
+          "description": "address bit stuck low duplicates the following block; stuck high leaves a region holding the previous frame",
+          "maps_to_clause": "B4"
+        },
+        {
+          "id": "bayer-phase-error-swaps-colour-channels",
+          "description": "a flat red frame turns green with phase (1,0) and blue with (1,1)",
+          "maps_to_clause": "B5"
+        },
+        {
+          "id": "every-control-changes-the-picture",
+          "description": "each control engaged alone changes a test chart, and repeated runs with the same seed are identical",
+          "maps_to_clause": "B6"
+        },
+        {
+          "id": "odd-and-tiny-frames-are-safe",
+          "description": "1x1, 3x1, 1x5 and 7x3 frames with every control engaged",
+          "probe": true,
+          "maps_to_clause": "B6"
+        },
+        {
+          "id": "field-errors-swap-or-drop-lines",
+          "description": "FIELD SWAP exchanges each line pair exactly; FIELD DROP line-doubles the even field",
+          "maps_to_clause": "B6"
+        }
       ]
     }
   ]

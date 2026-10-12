@@ -1,0 +1,91 @@
+{
+  "verdict": "revise",
+  "stance": "failure-mode-hawk",
+  "findings": [
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/PhotoSaver.kt",
+      "line": 42,
+      "severity": "high",
+      "scenario": "API 26-28: WRITE_EXTERNAL_STORAGE is declared (manifest maxSdkVersion 28) but never requested at runtime anywhere in MainActivity. On the first shutter press FileOutputStream throws FileNotFoundException (EACCES). save() has try/finally with no catch, and it runs via io.execute (MainActivity.kt:171), so the exception is uncaught on a plain executor thread and the default handler kills the process. Every photo on Android 8/8.1/9 crashes the app.",
+      "suggested_fix": "On SDK < 29, request WRITE_EXTERNAL_STORAGE before capturing (or on first launch). Wrap the save body in catch(Exception) -> return null so a failure shows 'Could not save photo' instead of crashing."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/PhotoSaver.kt",
+      "line": 32,
+      "severity": "medium",
+      "scenario": "API 29+: insert() succeeds with IS_PENDING=1, then openOutputStream throws (storage full, volume unavailable) -> uncaught on the io thread -> crash, and the pending row is orphaned (hidden, and only cleaned up by MediaStore after about 7 days). If openOutputStream returns null, or compress() returns false, IS_PENDING is still cleared and a zero-byte or corrupt PNG is published while the UI says SAVED.",
+      "suggested_fix": "Use try/catch around the stream write: on an exception, a null stream or compress()==false, call resolver.delete(uri) and return null. Only clear IS_PENDING after a confirmed write."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/CameraFeed.kt",
+      "line": 40,
+      "severity": "medium",
+      "scenario": "The start() listener runs on the main thread. future.get() throws ExecutionException when CameraX init fails (camera service unavailable, InitializationException), and bindToLifecycle throws IllegalStateException when the lifecycle is already DESTROYED (for example, the permission callback or a FLIP lands during teardown). Only IllegalArgumentException is caught (line 62), so both crash the main thread.",
+      "suggested_fix": "Catch Exception around get() and the bind, log it, and show a 'camera unavailable' state. Return early if activity.lifecycle.currentState == DESTROYED."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/CameraFeed.kt",
+      "line": 65,
+      "severity": "medium",
+      "scenario": "The fallback only goes FRONT->BACK. The manifest requires only android.hardware.camera.any, so front-camera-only devices (some tablets, Chromebooks) can install. On those, the initial BACK bind throws IllegalArgumentException, it is logged, and the viewfinder stays black forever with no message to the user.",
+      "suggested_fix": "Fall back in both directions (try the other lens once), or choose the lens with provider.hasCamera(selector) before binding. If no camera binds, show a visible error."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/MainActivity.kt",
+      "line": 234,
+      "severity": "medium",
+      "scenario": "Torch after FLIP: flip() calls start(), which only queues a listener on the main executor, so setTorch(true) on line 234 runs against the OLD camera before unbindAll/rebind. The new camera comes up with the torch off while the LIGHT toggle still shows ON. The same desync happens after onStop->onStart: CameraX drops the torch when the camera closes and does not restore it. The front lens usually has no flash at all.",
+      "suggested_fix": "Keep the desired torch state in CameraFeed and apply it right after bindToLifecycle succeeds (if camera.cameraInfo.hasFlashUnit()). Otherwise reset the toggle UI to OFF."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/MainActivity.kt",
+      "line": 130,
+      "severity": "low",
+      "scenario": "The DisplayListener is registered only while resumed, and onResume never re-reads the rotation. If the user turns the phone 180 degrees while in another app, sensorLandscape rotates the display with no config change and no callback to this activity, so on return the analysis targetRotation is stale and the feed is upside down until the next display change.",
+      "suggested_fix": "In onResume, call feed.setRotation(current display rotation) right after registering the listener."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/MainActivity.kt",
+      "line": 98,
+      "severity": "low",
+      "scenario": "Activity.display / Context.getDisplay() is public SDK only from API 30 (also used at CameraFeed.kt:52). On API 26-29 it links to a hidden ContextWrapper method. It works today through the greylist but is not guaranteed by the SDK, and lint flags it as NewApi (not caught by lintVital). A failure would be NoSuchMethodError at camera start or on rotation.",
+      "suggested_fix": "Use ContextCompat.getDisplayOrDefault(context).rotation, or the deprecated windowManager.defaultDisplay.rotation, below API 30."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/MainActivity.kt",
+      "line": 70,
+      "severity": "low",
+      "scenario": "The io executor here and the analyzer executor (CameraFeed.kt:26) are non-daemon and never shut down; there is no onDestroy. configChanges (manifest) omits uiMode, smallestScreenSize, density and locale, so a dark-mode toggle, multi-window or a foldable posture change recreates the activity. Each recreation leaks 2 idle threads and resets all rack/FX settings, and a save in flight posts onSaved into the destroyed activity's view tree.",
+      "suggested_fix": "Add onDestroy with io.shutdown() and a CameraFeed.shutdown() (analysis.clearAnalyzer() plus executor.shutdown()). Optionally keep settings in savedInstanceState or a ViewModel."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/ViewfinderView.kt",
+      "line": 28,
+      "severity": "low",
+      "scenario": "setPixels runs outside the lock on `back`, the bitmap that was front one swap earlier. With hardware acceleration, onDraw only records the bitmap reference; the RenderThread uploads the pixels later, outside the lock. If the last recorded display list still references that bitmap (no onDraw since the previous post) and another view forces a frame (flash animation, knob drag), the RenderThread can upload it mid-write. The result is occasional torn frames, never a crash.",
+      "suggested_fix": "Acceptable for a glitch-aesthetic app. For a strict fix, reuse a bitmap only after onDraw has recorded a newer one (a drawn-generation flag or a triple buffer)."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/CameraFeed.kt",
+      "line": 53,
+      "severity": "low",
+      "scenario": "The analyzer has no try/catch. CameraX dispatches analyze() via executor.execute without catching, so any exception from core (an index error in Bend/Vhs/Dither at extreme rack settings, or an ExecutionException rethrown by Parallel.rows f.get()) kills the process rather than just freezing the preview. CameraSampler's own indexing is safe: the max Y index (sh-1)*rowStride+sw-1 and the max U/V index ((sh-1)/2)*uvRowStride+((sw-1)/2)*pixelStride fit within remaining() for standard layouts, odd sizes included, plus 4096 bytes of slack.",
+      "suggested_fix": "Wrap deliver/onFrame in try/catch(Throwable), log it and drop the frame. image.use already guarantees close()."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/MainActivity.kt",
+      "line": 81,
+      "severity": "low",
+      "scenario": "If camera permission is denied (or 'don't ask again' is set), the app shows one toast and then a permanently black viewfinder with no retry. Shutter taps set captureRequested, which stays latched and fires on the first frame once the camera eventually starts.",
+      "suggested_fix": "Show a persistent 'grant camera' control that re-requests the permission or opens app settings. Ignore or clear shutter taps until a frame has arrived."
+    },
+    {
+      "file": "app/src/main/kotlin/com/chickengamer/circuitbender/MainActivity.kt",
+      "line": 517,
+      "severity": "low",
+      "scenario": "Legacy path (API 26-28, once the permission crash is fixed): save returns a file:// Uri, so 'SAVED / tap to view' silently does nothing. The file is never media-scanned, so it does not appear in the gallery.",
+      "suggested_fix": "Call MediaScannerConnection.scanFile and keep the content Uri it returns for openLast."
+    }
+  ],
+  "highest_impact_change": "Make PhotoSaver failure-safe: request WRITE_EXTERNAL_STORAGE on API 26-28, catch exceptions in save() and return null, and delete the pending MediaStore row on failure. Today every shutter press on Android 8-9 kills the process, and any storage error on 10+ does too."
+}
