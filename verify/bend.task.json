@@ -1,0 +1,57 @@
+{
+  "task": "bend",
+  "title": "Circuit-bend rack",
+  "description": "Simulate bending a cheap digital camera's sensor bus and frame memory the way real benders do (docs/RESEARCH.md section 1): the image travels as a YUV422 byte stream (Y0 U Y1 V) from sensor to DSP to frame buffer, and each control is a real bend point - a data line D0-D7 tied high/low through a pot, bridged or crossed data lines, data-to-clock crosstalk, byte-phase slip, a pot on the pixel clock, lost HSYNC (wrong stride), lost VSYNC (vertical roll), a stuck frame-buffer address line, a wrong Bayer phase, sensor config-bus corruption, JPEG bit errors, field errors and brownout.",
+  "tier": "standard",
+  "clauses": [
+    {
+      "id": "B1",
+      "text": "With every control at rest, the bend stage passes the picture through untouched.",
+      "observable_by": "a test named \"neutral rack is a perfect bypass\" passes"
+    },
+    {
+      "id": "B2",
+      "text": "Data-line bends act on the bytes on the bus: a hard short forces the bit on every byte, an open pot leaves the bus alone, and in between the bit flips intermittently in proportion to the pot; bridged lines AND/OR together and crossed lines swap bits.",
+      "observable_by": "tests named \"stuck data line forces the bit through the pot\" and \"bridged and crossed lines rewire bits\" pass"
+    },
+    {
+      "id": "B3",
+      "text": "Timing bends move pixels the way the real faults do: a wrong line stride slants and wraps the picture, a pot on the pixel clock does nothing until past its knee and then tears lines sideways, and lost VSYNC rolls the picture with a black blanking bar at the seam.",
+      "observable_by": "tests named \"hsync loss rewraps lines at the wrong stride\", \"pixel clock pot has a knee\" and \"vsync loss rolls with a blanking bar\" pass"
+    },
+    {
+      "id": "B4",
+      "text": "A stuck frame-buffer address line repeats blocks of the picture and leaves stale memory from earlier frames showing through.",
+      "observable_by": "a test named \"stuck address line repeats blocks and leaves stale frames\" passes"
+    },
+    {
+      "id": "B5",
+      "text": "A wrong Bayer phase gives the documented colour swaps: one pixel across swaps red and green, one across and one down swaps red and blue.",
+      "observable_by": "a test named \"bayer phase error swaps colour channels\" passes"
+    },
+    {
+      "id": "B6",
+      "text": "Every other control visibly changes the picture, the same settings and seed always give the same picture, and odd or tiny frames never crash.",
+      "observable_by": "tests named \"every control changes the picture\" and \"odd and tiny frames are safe\" pass"
+    }
+  ],
+  "units": [
+    {
+      "id": "bend",
+      "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Bend.kt",
+      "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/BendTest.kt",
+      "cases": [
+        { "id": "neutral-rack-is-a-perfect-bypass", "description": "default BendSettings returns a frame equal to the input", "probe": true, "maps_to_clause": "B1" },
+        { "id": "stuck-data-line-forces-the-bit-through-the-pot", "description": "D7 high with pot shorted sets bit 7 on every byte; pot open changes nothing; pot halfway affects about half the eligible bytes", "maps_to_clause": "B2" },
+        { "id": "bridged-and-crossed-lines-rewire-bits", "description": "known bytes through AND bridge, OR bridge and a swap of two lines give exact expected values", "maps_to_clause": "B2" },
+        { "id": "hsync-loss-rewraps-lines-at-the-wrong-stride", "description": "stride +d reads row y from stream position y*(W+d)", "maps_to_clause": "B3" },
+        { "id": "pixel-clock-pot-has-a-knee", "description": "pot below the knee leaves every line in place, pot fully turned shifts many lines", "probe": true, "maps_to_clause": "B3" },
+        { "id": "vsync-loss-rolls-with-a-blanking-bar", "description": "the picture moves down frame to frame and contains black blanking rows", "maps_to_clause": "B3" },
+        { "id": "stuck-address-line-repeats-blocks-and-leaves-stale-frames", "description": "address bit stuck low duplicates the following block; stuck high leaves a region holding the previous frame", "maps_to_clause": "B4" },
+        { "id": "bayer-phase-error-swaps-colour-channels", "description": "a flat red frame turns green with phase (1,0) and blue with (1,1)", "maps_to_clause": "B5" },
+        { "id": "every-control-changes-the-picture", "description": "each control engaged alone changes a test chart, and repeated runs with the same seed are identical", "maps_to_clause": "B6" },
+        { "id": "odd-and-tiny-frames-are-safe", "description": "1x1, 3x1, 1x5 and 7x3 frames with every control engaged", "probe": true, "maps_to_clause": "B6" }
+      ]
+    }
+  ]
+}

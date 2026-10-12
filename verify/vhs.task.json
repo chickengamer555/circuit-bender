@@ -1,0 +1,44 @@
+{
+  "task": "vhs",
+  "title": "VHS camcorder signal chain",
+  "description": "Make a frame look like it was shot on a consumer camcorder and recorded to VHS, using the real signal numbers (docs/RESEARCH.md section 2): ~320 luma samples per line, ~40 chroma samples per line, chroma delayed to the right, edge-enhancement ringing, tape noise, snow, dropouts, line jitter, a head-switching band at the bottom and CCD smear.",
+  "tier": "standard",
+  "clauses": [
+    {
+      "id": "V1",
+      "text": "Colour is far blurrier than brightness, about one eighth of the detail, so colour bleeds past edges while black-and-white edges stay fairly sharp.",
+      "observable_by": "a test named \"chroma is eight times softer than luma\" passes"
+    },
+    {
+      "id": "V2",
+      "text": "Colour sits a couple of pixels to the right of the brightness, and brightness edges get the camcorder sharpening halo.",
+      "observable_by": "tests named \"chroma is delayed to the right\" and \"sharpening overshoots edges\" pass"
+    },
+    {
+      "id": "V3",
+      "text": "The bottom few lines carry the head-switching band, shoved sideways, while the rest of the picture is not; bright lights smear into a vertical column like a CCD.",
+      "observable_by": "tests named \"head switching band sits at the bottom\" and \"ccd smears bright points vertically\" pass"
+    },
+    {
+      "id": "V4",
+      "text": "Noise, snow and jitter move from frame to frame, but the same seed and frame number always give the same picture, and tiny frames never crash.",
+      "observable_by": "tests named \"tape noise is animated but reproducible\" and \"tiny frames are safe\" pass"
+    }
+  ],
+  "units": [
+    {
+      "id": "vhs",
+      "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Vhs.kt",
+      "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/VhsTest.kt",
+      "cases": [
+        { "id": "chroma-is-eight-times-softer-than-luma", "description": "with noise off, a colour edge spreads over at least 6 px while a grey edge's 10-90% rise is at most 3 px", "maps_to_clause": "V1" },
+        { "id": "chroma-is-delayed-to-the-right", "description": "the chroma edge midpoint sits 1-3 px right of the luma edge midpoint", "maps_to_clause": "V2" },
+        { "id": "sharpening-overshoots-edges", "description": "a dark-to-light step overshoots above the plateau and undershoots below the floor", "maps_to_clause": "V2" },
+        { "id": "head-switching-band-sits-at-the-bottom", "description": "only the bottom band rows differ from the band-off render", "maps_to_clause": "V3" },
+        { "id": "ccd-smears-bright-points-vertically", "description": "a single clipped point brightens its whole column, not its neighbours", "maps_to_clause": "V3" },
+        { "id": "tape-noise-is-animated-but-reproducible", "description": "frame 1 differs from frame 2, frame 1 twice is identical", "maps_to_clause": "V4" },
+        { "id": "tiny-frames-are-safe", "description": "0x0, 1x1, 2x9 and 9x2 frames with every artifact on", "probe": true, "maps_to_clause": "V4" }
+      ]
+    }
+  ]
+}

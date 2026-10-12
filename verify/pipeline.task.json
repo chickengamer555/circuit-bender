@@ -1,0 +1,60 @@
+{
+  "task": "pipeline",
+  "title": "Camera-to-photo pipeline",
+  "description": "Take a phone camera frame (YUV_420_888 planes), downgrade it to camcorder resolution, run bend -> date stamp -> VHS -> dither -> viewfinder overlay, and make the saved photo exactly what the viewfinder showed.",
+  "tier": "standard",
+  "clauses": [
+    {
+      "id": "P1",
+      "text": "The phone's camera image is cropped to 4:3, rotated upright and averaged down to the chosen low resolution (camcorder 320x240, or Game Boy Camera 128x112).",
+      "observable_by": "a test named \"camera frames are downsampled upright\" passes"
+    },
+    {
+      "id": "P2",
+      "text": "The photo you take is exactly the frame the viewfinder showed - overlay, bends and all - just scaled up with hard pixel edges.",
+      "observable_by": "a test named \"photo is the viewfinder frame scaled up\" passes"
+    },
+    {
+      "id": "P3",
+      "text": "With dither on, the whole photo, overlay included, uses only the palette's colours; with bend on, the picture differs from bend off.",
+      "observable_by": "a test named \"filters toggle independently\" passes"
+    },
+    {
+      "id": "P4",
+      "text": "The full chain with everything switched on runs fast enough for a live viewfinder (well under one frame at 30 fps on a desktop JVM, leaving headroom for a phone).",
+      "observable_by": "a test named \"full chain is fast enough for live preview\" passes"
+    }
+  ],
+  "units": [
+    {
+      "id": "pipeline",
+      "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Pipeline.kt",
+      "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/PipelineTest.kt",
+      "cases": [
+        {
+          "id": "camera-frames-are-downsampled-upright",
+          "description": "synthetic Y/U/V planes with a marker in one corner, at rotations 0/90/180/270, interleaved chroma (pixelStride 2) and padded row strides",
+          "probe": true,
+          "maps_to_clause": "P1"
+        },
+        {
+          "id": "photo-is-the-viewfinder-frame-scaled-up",
+          "description": "capture output at scale k equals each viewfinder pixel repeated k x k",
+          "maps_to_clause": "P2"
+        },
+        {
+          "id": "filters-toggle-independently",
+          "description": "dither on -> only palette colours; bend on -> differs from bend off",
+          "maps_to_clause": "P3"
+        },
+        {
+          "id": "full-chain-is-fast-enough-for-live-preview",
+          "description": "median of 15 runs at 320x240 with all effects on, after warm-up, under 20 ms - declared guard: a do-nothing stub is trivially fast, so this can never be observed red; it must keep holding once the real chain exists",
+          "probe": true,
+          "maps_to_clause": "P4",
+          "guard": true
+        }
+      ]
+    }
+  ]
+}

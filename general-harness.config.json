@@ -1,0 +1,17 @@
+{
+  "contractsDir": "verify",
+  "gate": {
+    "test": ".\\gradlew.bat :core:test --console=plain --continue",
+    "typecheck": ".\\gradlew.bat :app:assembleDebug --console=plain"
+  },
+  "scanDirs": ["core/src", "app/src"],
+  "quality": {
+    "forbidFocusedTests": true,
+    "forbidSkippedTests": true,
+    "forbidAssertionFreeTests": "warn",
+    "forbidDebugLeftovers": "warn",
+    "forbidSuppressions": "warn",
+    "forbidSwallowedErrors": true,
+    "maxTodoMarkers": -1
+  }
+}

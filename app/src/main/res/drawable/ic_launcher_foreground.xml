@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A VHS cassette with a bent red wire across it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FF2B2B2B" android:pathData="M26,36h56v36h-56z" />
+    <path android:fillColor="#FFE8E8E8" android:pathData="M31,41h46v14h-46z" />
+    <path android:fillColor="#FF2B2B2B" android:pathData="M43,48m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+    <path android:fillColor="#FF2B2B2B" android:pathData="M65,48m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+    <path android:fillColor="#FF00C8FF" android:pathData="M31,59h46v4h-46z" />
+    <path android:fillColor="#FFFF00AA" android:pathData="M35,63h38v4h-38z" />
+    <path
+        android:strokeColor="#FFFF3030"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:pathData="M22,78 C34,58 46,92 58,70 S80,60 86,30" />
+    <path android:fillColor="#FFFF3030" android:pathData="M86,30m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path android:fillColor="#FFFF3030" android:pathData="M22,78m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+</vector>

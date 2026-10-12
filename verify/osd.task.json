@@ -1,0 +1,42 @@
+{
+  "task": "osd",
+  "title": "Camcorder on-screen display",
+  "description": "Draw the camcorder viewfinder overlay - REC dot, tape speed, battery, tape counter, and the time and date stamp in a blocky character-generator font with a black outline - so it is baked into every photo.",
+  "tier": "standard",
+  "clauses": [
+    {
+      "id": "O1",
+      "text": "The date and time read like a 90s US camcorder stamp, e.g. 'OCT.12 2026' and '10:48:03 PM', and the tape counter reads like '0:12:34'.",
+      "observable_by": "a test named \"stamps are formatted like a camcorder\" passes"
+    },
+    {
+      "id": "O2",
+      "text": "Text is drawn from a real 5x7 character-generator font with a black outline, so it stays readable on any background, and every character the overlay uses has a glyph.",
+      "observable_by": "a test named \"text is outlined block glyphs\" passes"
+    },
+    {
+      "id": "O3",
+      "text": "The overlay puts REC with a red dot top-left and the date bottom-right, and can be told to use only given colours so dithered photos stay pure.",
+      "observable_by": "tests named \"overlay elements land in their corners\" and \"overlay can be restricted to palette colours\" pass"
+    },
+    {
+      "id": "O4",
+      "text": "Drawing into a frame too small to hold the overlay clips instead of crashing.",
+      "observable_by": "a test named \"overlay clips in tiny frames\" passes"
+    }
+  ],
+  "units": [
+    {
+      "id": "osd",
+      "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Osd.kt",
+      "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/OsdTest.kt",
+      "cases": [
+        { "id": "stamps-are-formatted-like-a-camcorder", "description": "fixed date/time and counter values give exact strings, including single-digit days and midnight/noon", "probe": true, "maps_to_clause": "O1" },
+        { "id": "text-is-outlined-block-glyphs", "description": "every overlay character has a non-empty glyph except space; a drawn letter has white pixels each touching black outline", "maps_to_clause": "O2" },
+        { "id": "overlay-elements-land-in-their-corners", "description": "red pixels only top-left, date-stamp pixels in the bottom-right quadrant", "maps_to_clause": "O3" },
+        { "id": "overlay-can-be-restricted-to-palette-colours", "description": "with a palette given, every overlay pixel is a palette colour", "maps_to_clause": "O3" },
+        { "id": "overlay-clips-in-tiny-frames", "description": "1x1 and 10x4 frames", "probe": true, "maps_to_clause": "O4" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,815 @@
+{
+  "timestamp": "2026-10-12T10:38:17.066Z",
+  "root": "C:\\Users\\Lido\\Documents\\Circuit bender",
+  "stack": null,
+  "stackLabel": "unrecognised",
+  "runner": null,
+  "gate": {
+    "test": ".\\gradlew.bat :core:test --console=plain --continue",
+    "typecheck": ".\\gradlew.bat :app:assembleDebug --console=plain"
+  },
+  "gateSource": "config",
+  "contracts": [
+    {
+      "task": "bend",
+      "path": "C:\\Users\\Lido\\Documents\\Circuit bender\\verify\\bend.task.json",
+      "hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+      "errors": [],
+      "clauses": 6,
+      "cases": 10,
+      "probes": 3,
+      "tier": "standard"
+    },
+    {
+      "task": "dither",
+      "path": "C:\\Users\\Lido\\Documents\\Circuit bender\\verify\\dither.task.json",
+      "hash": "462a0f8854352c7a50e62ad401044e20d0ce94f6df7c8cb22e886861a03d01f1",
+      "errors": [],
+      "clauses": 4,
+      "cases": 6,
+      "probes": 2,
+      "tier": "standard"
+    },
+    {
+      "task": "osd",
+      "path": "C:\\Users\\Lido\\Documents\\Circuit bender\\verify\\osd.task.json",
+      "hash": "c8aecba0313807f8bd6d3d008072da0cbe07f0621e684593479827ab083e4b8d",
+      "errors": [],
+      "clauses": 4,
+      "cases": 5,
+      "probes": 2,
+      "tier": "standard"
+    },
+    {
+      "task": "pipeline",
+      "path": "C:\\Users\\Lido\\Documents\\Circuit bender\\verify\\pipeline.task.json",
+      "hash": "4edadaaf191f510eaf123caf435644953a017db82a684ae85a6141c5145975f1",
+      "errors": [],
+      "clauses": 4,
+      "cases": 4,
+      "probes": 2,
+      "tier": "standard"
+    },
+    {
+      "task": "vhs",
+      "path": "C:\\Users\\Lido\\Documents\\Circuit bender\\verify\\vhs.task.json",
+      "hash": "afc11b587f99a429d5157e5f0bfe318fecc291878ccd179973aa5613bddbfc09",
+      "errors": [],
+      "clauses": 4,
+      "cases": 7,
+      "probes": 1,
+      "tier": "standard"
+    }
+  ],
+  "legs": [
+    {
+      "leg": "test",
+      "command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "verdict": "PASS",
+      "durationMs": 10927,
+      "counts": {},
+      "failing": [],
+      "confidence": "exit-code-only",
+      "output": null
+    },
+    {
+      "leg": "typecheck",
+      "command": ".\\gradlew.bat :app:assembleDebug --console=plain",
+      "verdict": "PASS",
+      "durationMs": 5146,
+      "output": null
+    },
+    {
+      "leg": "integrity",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "verifier": "integrity",
+          "status": "ok",
+          "label": "no focused, skipped or assertion-free tests across 5 test file(s)"
+        }
+      ],
+      "stats": {
+        "files": 16,
+        "optedOut": 0,
+        "testFiles": 5,
+        "sourceFiles": 11,
+        "focused": 0,
+        "skipped": 0,
+        "assertionFree": 0,
+        "suppressions": 0,
+        "debugLeftovers": 0,
+        "swallowedErrors": 0,
+        "explainedSwallows": 0,
+        "todos": 0
+      }
+    },
+    {
+      "leg": "red-proof",
+      "verdict": "PASS",
+      "required": true,
+      "proofs": [
+        {
+          "task": "bend",
+          "proven": [
+            {
+              "case": {
+                "unit": "bend",
+                "id": "neutral-rack-is-a-perfect-bypass",
+                "description": "default BendSettings returns a frame equal to the input",
+                "probe": true,
+                "maps_to_clause": "B1",
+                "key": "bend/neutral-rack-is-a-perfect-bypass"
+              },
+              "proof": {
+                "task": "bend",
+                "unit": "bend",
+                "case": "neutral-rack-is-a-perfect-bypass",
+                "key": "bend/neutral-rack-is-a-perfect-bypass",
+                "matched_test": "neutral rack is a perfect bypass()",
+                "failed_at": "2026-10-12T10:10:32.756Z",
+                "contract_hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "bend",
+                "id": "stuck-data-line-forces-the-bit-through-the-pot",
+                "description": "D7 high with pot shorted sets bit 7 on every byte; pot open changes nothing; pot halfway affects about half the eligible bytes",
+                "maps_to_clause": "B2",
+                "key": "bend/stuck-data-line-forces-the-bit-through-the-pot"
+              },
+              "proof": {
+                "task": "bend",
+                "unit": "bend",
+                "case": "stuck-data-line-forces-the-bit-through-the-pot",
+                "key": "bend/stuck-data-line-forces-the-bit-through-the-pot",
+                "matched_test": "stuck data line forces the bit through the pot()",
+                "failed_at": "2026-10-12T10:10:32.756Z",
+                "contract_hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "bend",
+                "id": "bridged-and-crossed-lines-rewire-bits",
+                "description": "known bytes through AND bridge, OR bridge and a swap of two lines give exact expected values",
+                "maps_to_clause": "B2",
+                "key": "bend/bridged-and-crossed-lines-rewire-bits"
+              },
+              "proof": {
+                "task": "bend",
+                "unit": "bend",
+                "case": "bridged-and-crossed-lines-rewire-bits",
+                "key": "bend/bridged-and-crossed-lines-rewire-bits",
+                "matched_test": "bridged and crossed lines rewire bits()",
+                "failed_at": "2026-10-12T10:10:32.756Z",
+                "contract_hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "bend",
+                "id": "hsync-loss-rewraps-lines-at-the-wrong-stride",
+                "description": "stride +d reads row y from stream position y*(W+d)",
+                "maps_to_clause": "B3",
+                "key": "bend/hsync-loss-rewraps-lines-at-the-wrong-stride"
+              },
+              "proof": {
+                "task": "bend",
+                "unit": "bend",
+                "case": "hsync-loss-rewraps-lines-at-the-wrong-stride",
+                "key": "bend/hsync-loss-rewraps-lines-at-the-wrong-stride",
+                "matched_test": "hsync loss rewraps lines at the wrong stride()",
+                "failed_at": "2026-10-12T10:10:32.756Z",
+                "contract_hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "bend",
+                "id": "pixel-clock-pot-has-a-knee",
+                "description": "pot below the knee leaves every line in place, pot fully turned shifts many lines",
+                "probe": true,
+                "maps_to_clause": "B3",
+                "key": "bend/pixel-clock-pot-has-a-knee"
+              },
+              "proof": {
+                "task": "bend",
+                "unit": "bend",
+                "case": "pixel-clock-pot-has-a-knee",
+                "key": "bend/pixel-clock-pot-has-a-knee",
+                "matched_test": "pixel clock pot has a knee()",
+                "failed_at": "2026-10-12T10:10:32.756Z",
+                "contract_hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "bend",
+                "id": "vsync-loss-rolls-with-a-blanking-bar",
+                "description": "the picture moves down frame to frame and contains black blanking rows",
+                "maps_to_clause": "B3",
+                "key": "bend/vsync-loss-rolls-with-a-blanking-bar"
+              },
+              "proof": {
+                "task": "bend",
+                "unit": "bend",
+                "case": "vsync-loss-rolls-with-a-blanking-bar",
+                "key": "bend/vsync-loss-rolls-with-a-blanking-bar",
+                "matched_test": "vsync loss rolls with a blanking bar()",
+                "failed_at": "2026-10-12T10:10:32.756Z",
+                "contract_hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "bend",
+                "id": "stuck-address-line-repeats-blocks-and-leaves-stale-frames",
+                "description": "address bit stuck low duplicates the following block; stuck high leaves a region holding the previous frame",
+                "maps_to_clause": "B4",
+                "key": "bend/stuck-address-line-repeats-blocks-and-leaves-stale-frames"
+              },
+              "proof": {
+                "task": "bend",
+                "unit": "bend",
+                "case": "stuck-address-line-repeats-blocks-and-leaves-stale-frames",
+                "key": "bend/stuck-address-line-repeats-blocks-and-leaves-stale-frames",
+                "matched_test": "stuck address line repeats blocks and leaves stale frames()",
+                "failed_at": "2026-10-12T10:10:32.756Z",
+                "contract_hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "bend",
+                "id": "bayer-phase-error-swaps-colour-channels",
+                "description": "a flat red frame turns green with phase (1,0) and blue with (1,1)",
+                "maps_to_clause": "B5",
+                "key": "bend/bayer-phase-error-swaps-colour-channels"
+              },
+              "proof": {
+                "task": "bend",
+                "unit": "bend",
+                "case": "bayer-phase-error-swaps-colour-channels",
+                "key": "bend/bayer-phase-error-swaps-colour-channels",
+                "matched_test": "bayer phase error swaps colour channels()",
+                "failed_at": "2026-10-12T10:10:32.756Z",
+                "contract_hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "bend",
+                "id": "every-control-changes-the-picture",
+                "description": "each control engaged alone changes a test chart, and repeated runs with the same seed are identical",
+                "maps_to_clause": "B6",
+                "key": "bend/every-control-changes-the-picture"
+              },
+              "proof": {
+                "task": "bend",
+                "unit": "bend",
+                "case": "every-control-changes-the-picture",
+                "key": "bend/every-control-changes-the-picture",
+                "matched_test": "every control changes the picture()",
+                "failed_at": "2026-10-12T10:10:32.756Z",
+                "contract_hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "bend",
+                "id": "odd-and-tiny-frames-are-safe",
+                "description": "1x1, 3x1, 1x5 and 7x3 frames with every control engaged",
+                "probe": true,
+                "maps_to_clause": "B6",
+                "key": "bend/odd-and-tiny-frames-are-safe"
+              },
+              "proof": {
+                "task": "bend",
+                "unit": "bend",
+                "case": "odd-and-tiny-frames-are-safe",
+                "key": "bend/odd-and-tiny-frames-are-safe",
+                "matched_test": "odd and tiny frames are safe()",
+                "failed_at": "2026-10-12T10:10:32.756Z",
+                "contract_hash": "9f84139434bf04948b53a21d7cbe6834c9db012590d5f94d6d13af4449952c5c",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            }
+          ],
+          "missing": [],
+          "stale": [],
+          "weak": [],
+          "guards": [],
+          "total": 10
+        },
+        {
+          "task": "dither",
+          "proven": [
+            {
+              "case": {
+                "unit": "dither",
+                "id": "output-uses-only-palette-colours",
+                "description": "random noise image through every algorithm x several palettes",
+                "maps_to_clause": "D1",
+                "key": "dither/output-uses-only-palette-colours"
+              },
+              "proof": {
+                "task": "dither",
+                "unit": "dither",
+                "case": "output-uses-only-palette-colours",
+                "key": "dither/output-uses-only-palette-colours",
+                "matched_test": "output uses only palette colours()",
+                "failed_at": "2026-10-12T10:00:31.842Z",
+                "contract_hash": "462a0f8854352c7a50e62ad401044e20d0ce94f6df7c8cb22e886861a03d01f1",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "dither",
+                "id": "bayer-matrices-match-the-published-values",
+                "description": "2x2, 4x4 and 8x8 index matrices equal the recursive Bayer definition",
+                "maps_to_clause": "D2",
+                "key": "dither/bayer-matrices-match-the-published-values"
+              },
+              "proof": {
+                "task": "dither",
+                "unit": "dither",
+                "case": "bayer-matrices-match-the-published-values",
+                "key": "dither/bayer-matrices-match-the-published-values",
+                "matched_test": "bayer matrices match the published values()",
+                "failed_at": "2026-10-12T10:00:31.842Z",
+                "contract_hash": "462a0f8854352c7a50e62ad401044e20d0ce94f6df7c8cb22e886861a03d01f1",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "dither",
+                "id": "bayer4-half-grey-is-half-white",
+                "description": "flat grey 128 on a 1-bit palette gives exactly 8 of every 16 pixels white",
+                "maps_to_clause": "D2",
+                "key": "dither/bayer4-half-grey-is-half-white"
+              },
+              "proof": {
+                "task": "dither",
+                "unit": "dither",
+                "case": "bayer4-half-grey-is-half-white",
+                "key": "dither/bayer4-half-grey-is-half-white",
+                "matched_test": "bayer4 half grey is half white()",
+                "failed_at": "2026-10-12T10:00:31.842Z",
+                "contract_hash": "462a0f8854352c7a50e62ad401044e20d0ce94f6df7c8cb22e886861a03d01f1",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "dither",
+                "id": "error-diffusion-preserves-average-tone",
+                "description": "flat 30% grey through FS, JJN, Stucki, Sierra gives 30% white within 2%",
+                "maps_to_clause": "D3",
+                "key": "dither/error-diffusion-preserves-average-tone"
+              },
+              "proof": {
+                "task": "dither",
+                "unit": "dither",
+                "case": "error-diffusion-preserves-average-tone",
+                "key": "dither/error-diffusion-preserves-average-tone",
+                "matched_test": "error diffusion preserves average tone()",
+                "failed_at": "2026-10-12T10:00:31.842Z",
+                "contract_hash": "462a0f8854352c7a50e62ad401044e20d0ce94f6df7c8cb22e886861a03d01f1",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "dither",
+                "id": "atkinson-drops-faint-tones",
+                "description": "flat 10% grey: Atkinson yields no white pixels while Floyd-Steinberg yields about 10%",
+                "probe": true,
+                "maps_to_clause": "D3",
+                "key": "dither/atkinson-drops-faint-tones"
+              },
+              "proof": {
+                "task": "dither",
+                "unit": "dither",
+                "case": "atkinson-drops-faint-tones",
+                "key": "dither/atkinson-drops-faint-tones",
+                "matched_test": "atkinson drops faint tones()",
+                "failed_at": "2026-10-12T10:00:31.842Z",
+                "contract_hash": "462a0f8854352c7a50e62ad401044e20d0ce94f6df7c8cb22e886861a03d01f1",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "dither",
+                "id": "degenerate-inputs-are-safe",
+                "description": "0x0, 1x1, pure black and pure white frames",
+                "probe": true,
+                "maps_to_clause": "D4",
+                "key": "dither/degenerate-inputs-are-safe"
+              },
+              "proof": {
+                "task": "dither",
+                "unit": "dither",
+                "case": "degenerate-inputs-are-safe",
+                "key": "dither/degenerate-inputs-are-safe",
+                "matched_test": "degenerate inputs are safe()",
+                "failed_at": "2026-10-12T10:00:31.842Z",
+                "contract_hash": "462a0f8854352c7a50e62ad401044e20d0ce94f6df7c8cb22e886861a03d01f1",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            }
+          ],
+          "missing": [],
+          "stale": [],
+          "weak": [],
+          "guards": [],
+          "total": 6
+        },
+        {
+          "task": "osd",
+          "proven": [
+            {
+              "case": {
+                "unit": "osd",
+                "id": "stamps-are-formatted-like-a-camcorder",
+                "description": "fixed date/time and counter values give exact strings, including single-digit days and midnight/noon",
+                "probe": true,
+                "maps_to_clause": "O1",
+                "key": "osd/stamps-are-formatted-like-a-camcorder"
+              },
+              "proof": {
+                "task": "osd",
+                "unit": "osd",
+                "case": "stamps-are-formatted-like-a-camcorder",
+                "key": "osd/stamps-are-formatted-like-a-camcorder",
+                "matched_test": "stamps are formatted like a camcorder()",
+                "failed_at": "2026-10-12T10:10:40.539Z",
+                "contract_hash": "c8aecba0313807f8bd6d3d008072da0cbe07f0621e684593479827ab083e4b8d",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "osd",
+                "id": "text-is-outlined-block-glyphs",
+                "description": "every overlay character has a non-empty glyph except space; a drawn letter has white pixels each touching black outline",
+                "maps_to_clause": "O2",
+                "key": "osd/text-is-outlined-block-glyphs"
+              },
+              "proof": {
+                "task": "osd",
+                "unit": "osd",
+                "case": "text-is-outlined-block-glyphs",
+                "key": "osd/text-is-outlined-block-glyphs",
+                "matched_test": "text is outlined block glyphs()",
+                "failed_at": "2026-10-12T10:10:40.539Z",
+                "contract_hash": "c8aecba0313807f8bd6d3d008072da0cbe07f0621e684593479827ab083e4b8d",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "osd",
+                "id": "overlay-elements-land-in-their-corners",
+                "description": "red pixels only top-left, date-stamp pixels in the bottom-right quadrant",
+                "maps_to_clause": "O3",
+                "key": "osd/overlay-elements-land-in-their-corners"
+              },
+              "proof": {
+                "task": "osd",
+                "unit": "osd",
+                "case": "overlay-elements-land-in-their-corners",
+                "key": "osd/overlay-elements-land-in-their-corners",
+                "matched_test": "overlay elements land in their corners()",
+                "failed_at": "2026-10-12T10:10:40.539Z",
+                "contract_hash": "c8aecba0313807f8bd6d3d008072da0cbe07f0621e684593479827ab083e4b8d",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "osd",
+                "id": "overlay-can-be-restricted-to-palette-colours",
+                "description": "with a palette given, every overlay pixel is a palette colour",
+                "maps_to_clause": "O3",
+                "key": "osd/overlay-can-be-restricted-to-palette-colours"
+              },
+              "proof": {
+                "task": "osd",
+                "unit": "osd",
+                "case": "overlay-can-be-restricted-to-palette-colours",
+                "key": "osd/overlay-can-be-restricted-to-palette-colours",
+                "matched_test": "overlay can be restricted to palette colours()",
+                "failed_at": "2026-10-12T10:10:40.539Z",
+                "contract_hash": "c8aecba0313807f8bd6d3d008072da0cbe07f0621e684593479827ab083e4b8d",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "osd",
+                "id": "overlay-clips-in-tiny-frames",
+                "description": "1x1 and 10x4 frames",
+                "probe": true,
+                "maps_to_clause": "O4",
+                "key": "osd/overlay-clips-in-tiny-frames"
+              },
+              "proof": {
+                "task": "osd",
+                "unit": "osd",
+                "case": "overlay-clips-in-tiny-frames",
+                "key": "osd/overlay-clips-in-tiny-frames",
+                "matched_test": "overlay clips in tiny frames()",
+                "failed_at": "2026-10-12T10:10:40.539Z",
+                "contract_hash": "c8aecba0313807f8bd6d3d008072da0cbe07f0621e684593479827ab083e4b8d",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            }
+          ],
+          "missing": [],
+          "stale": [],
+          "weak": [],
+          "guards": [],
+          "total": 5
+        },
+        {
+          "task": "pipeline",
+          "proven": [
+            {
+              "case": {
+                "unit": "pipeline",
+                "id": "camera-frames-are-downsampled-upright",
+                "description": "synthetic Y/U/V planes with a marker in one corner, at rotations 0/90/180/270, interleaved chroma (pixelStride 2) and padded row strides",
+                "probe": true,
+                "maps_to_clause": "P1",
+                "key": "pipeline/camera-frames-are-downsampled-upright"
+              },
+              "proof": {
+                "task": "pipeline",
+                "unit": "pipeline",
+                "case": "camera-frames-are-downsampled-upright",
+                "key": "pipeline/camera-frames-are-downsampled-upright",
+                "matched_test": "camera frames are downsampled upright()",
+                "failed_at": "2026-10-12T10:10:48.051Z",
+                "contract_hash": "4edadaaf191f510eaf123caf435644953a017db82a684ae85a6141c5145975f1",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "pipeline",
+                "id": "photo-is-the-viewfinder-frame-scaled-up",
+                "description": "capture output at scale k equals each viewfinder pixel repeated k x k",
+                "maps_to_clause": "P2",
+                "key": "pipeline/photo-is-the-viewfinder-frame-scaled-up"
+              },
+              "proof": {
+                "task": "pipeline",
+                "unit": "pipeline",
+                "case": "photo-is-the-viewfinder-frame-scaled-up",
+                "key": "pipeline/photo-is-the-viewfinder-frame-scaled-up",
+                "matched_test": "photo is the viewfinder frame scaled up()",
+                "failed_at": "2026-10-12T10:10:48.051Z",
+                "contract_hash": "4edadaaf191f510eaf123caf435644953a017db82a684ae85a6141c5145975f1",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "pipeline",
+                "id": "filters-toggle-independently",
+                "description": "dither on -> only palette colours; bend on -> differs from bend off",
+                "maps_to_clause": "P3",
+                "key": "pipeline/filters-toggle-independently"
+              },
+              "proof": {
+                "task": "pipeline",
+                "unit": "pipeline",
+                "case": "filters-toggle-independently",
+                "key": "pipeline/filters-toggle-independently",
+                "matched_test": "filters toggle independently()",
+                "failed_at": "2026-10-12T10:10:48.051Z",
+                "contract_hash": "4edadaaf191f510eaf123caf435644953a017db82a684ae85a6141c5145975f1",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            }
+          ],
+          "missing": [],
+          "stale": [],
+          "weak": [],
+          "guards": [
+            {
+              "unit": "pipeline",
+              "id": "full-chain-is-fast-enough-for-live-preview",
+              "description": "median of 15 runs at 320x240 with all effects on, after warm-up, under 20 ms - declared guard: a do-nothing stub is trivially fast, so this can never be observed red; it must keep holding once the real chain exists",
+              "probe": true,
+              "maps_to_clause": "P4",
+              "guard": true,
+              "key": "pipeline/full-chain-is-fast-enough-for-live-preview"
+            }
+          ],
+          "total": 4
+        },
+        {
+          "task": "vhs",
+          "proven": [
+            {
+              "case": {
+                "unit": "vhs",
+                "id": "chroma-is-eight-times-softer-than-luma",
+                "description": "with noise off, a colour edge spreads over at least 6 px while a grey edge's 10-90% rise is at most 3 px",
+                "maps_to_clause": "V1",
+                "key": "vhs/chroma-is-eight-times-softer-than-luma"
+              },
+              "proof": {
+                "task": "vhs",
+                "unit": "vhs",
+                "case": "chroma-is-eight-times-softer-than-luma",
+                "key": "vhs/chroma-is-eight-times-softer-than-luma",
+                "matched_test": "chroma is eight times softer than luma()",
+                "failed_at": "2026-10-12T10:09:13.168Z",
+                "contract_hash": "afc11b587f99a429d5157e5f0bfe318fecc291878ccd179973aa5613bddbfc09",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "vhs",
+                "id": "chroma-is-delayed-to-the-right",
+                "description": "the chroma edge midpoint sits 1-3 px right of the luma edge midpoint",
+                "maps_to_clause": "V2",
+                "key": "vhs/chroma-is-delayed-to-the-right"
+              },
+              "proof": {
+                "task": "vhs",
+                "unit": "vhs",
+                "case": "chroma-is-delayed-to-the-right",
+                "key": "vhs/chroma-is-delayed-to-the-right",
+                "matched_test": "chroma is delayed to the right()",
+                "failed_at": "2026-10-12T10:09:13.168Z",
+                "contract_hash": "afc11b587f99a429d5157e5f0bfe318fecc291878ccd179973aa5613bddbfc09",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "vhs",
+                "id": "sharpening-overshoots-edges",
+                "description": "a dark-to-light step overshoots above the plateau and undershoots below the floor",
+                "maps_to_clause": "V2",
+                "key": "vhs/sharpening-overshoots-edges"
+              },
+              "proof": {
+                "task": "vhs",
+                "unit": "vhs",
+                "case": "sharpening-overshoots-edges",
+                "key": "vhs/sharpening-overshoots-edges",
+                "matched_test": "sharpening overshoots edges()",
+                "failed_at": "2026-10-12T10:09:13.168Z",
+                "contract_hash": "afc11b587f99a429d5157e5f0bfe318fecc291878ccd179973aa5613bddbfc09",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "vhs",
+                "id": "head-switching-band-sits-at-the-bottom",
+                "description": "only the bottom band rows differ from the band-off render",
+                "maps_to_clause": "V3",
+                "key": "vhs/head-switching-band-sits-at-the-bottom"
+              },
+              "proof": {
+                "task": "vhs",
+                "unit": "vhs",
+                "case": "head-switching-band-sits-at-the-bottom",
+                "key": "vhs/head-switching-band-sits-at-the-bottom",
+                "matched_test": "head switching band sits at the bottom()",
+                "failed_at": "2026-10-12T10:09:13.168Z",
+                "contract_hash": "afc11b587f99a429d5157e5f0bfe318fecc291878ccd179973aa5613bddbfc09",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "vhs",
+                "id": "ccd-smears-bright-points-vertically",
+                "description": "a single clipped point brightens its whole column, not its neighbours",
+                "maps_to_clause": "V3",
+                "key": "vhs/ccd-smears-bright-points-vertically"
+              },
+              "proof": {
+                "task": "vhs",
+                "unit": "vhs",
+                "case": "ccd-smears-bright-points-vertically",
+                "key": "vhs/ccd-smears-bright-points-vertically",
+                "matched_test": "ccd smears bright points vertically()",
+                "failed_at": "2026-10-12T10:09:13.168Z",
+                "contract_hash": "afc11b587f99a429d5157e5f0bfe318fecc291878ccd179973aa5613bddbfc09",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "vhs",
+                "id": "tape-noise-is-animated-but-reproducible",
+                "description": "frame 1 differs from frame 2, frame 1 twice is identical",
+                "maps_to_clause": "V4",
+                "key": "vhs/tape-noise-is-animated-but-reproducible"
+              },
+              "proof": {
+                "task": "vhs",
+                "unit": "vhs",
+                "case": "tape-noise-is-animated-but-reproducible",
+                "key": "vhs/tape-noise-is-animated-but-reproducible",
+                "matched_test": "tape noise is animated but reproducible()",
+                "failed_at": "2026-10-12T10:09:13.168Z",
+                "contract_hash": "afc11b587f99a429d5157e5f0bfe318fecc291878ccd179973aa5613bddbfc09",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            },
+            {
+              "case": {
+                "unit": "vhs",
+                "id": "tiny-frames-are-safe",
+                "description": "0x0, 1x1, 2x9 and 9x2 frames with every artifact on",
+                "probe": true,
+                "maps_to_clause": "V4",
+                "key": "vhs/tiny-frames-are-safe"
+              },
+              "proof": {
+                "task": "vhs",
+                "unit": "vhs",
+                "case": "tiny-frames-are-safe",
+                "key": "vhs/tiny-frames-are-safe",
+                "matched_test": "odd and tiny frames are safe()",
+                "failed_at": "2026-10-12T10:09:13.168Z",
+                "contract_hash": "afc11b587f99a429d5157e5f0bfe318fecc291878ccd179973aa5613bddbfc09",
+                "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+                "confidence": "heuristic"
+              }
+            }
+          ],
+          "missing": [],
+          "stale": [],
+          "weak": [],
+          "guards": [],
+          "total": 7
+        }
+      ]
+    }
+  ],
+  "contractErrors": [],
+  "summary": {
+    "verdict": "green",
+    "reason": null,
+    "breakers": [],
+    "legs": 4,
+    "failed": 0,
+    "blocked": 0,
+    "contracts": 5,
+    "redProofRequired": true
+  }
+}
