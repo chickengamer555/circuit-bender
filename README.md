@@ -22,7 +22,7 @@ Tap **VHS**, **Bend** or **Dither** to switch an effect on or off. **Adjust** op
 
 The screen stays upright like a stock camera: turn the phone and the shot becomes landscape, while the picture and buttons rotate to match.
 
-Photos are saved as PNG in `Pictures/CircuitBender`, and videos as MP4 in `Movies/CircuitBender` (no sound yet). 
+Photos are saved as PNG in `Pictures/CircuitBender`, and videos as MP4 in `Movies/CircuitBender` with sound from the camcorder microphone. 
 
 ## Install
 

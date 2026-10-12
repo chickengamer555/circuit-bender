@@ -133,6 +133,19 @@ class MainActivity : ComponentActivity() {
     private var lastUri: Uri? = null
     private var lastMime = "image/png"
 
+    /** Videos record sound once allowed; until then they are silent. */
+    private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    private var micAsked = false
+
+    private fun micGranted() =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    private fun maybeAskMic() {
+        if (micAsked || micGranted()) return
+        micAsked = true
+        askMic.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
     private val askCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             viewfinder.message = null
@@ -315,7 +328,7 @@ class MainActivity : ComponentActivity() {
     private fun startRecording(s: PipelineSettings) {
         val (vw, vh) = VideoRecorder.sizeFor(s.displayWidth, s.displayHeight)
         try {
-            recorder = VideoRecorder(vw, vh, File(cacheDir, "rec_${System.nanoTime()}.mp4"))
+            recorder = VideoRecorder(vw, vh, File(cacheDir, "rec_${System.nanoTime()}.mp4"), withAudio = micGranted())
             recordStartedAt = System.currentTimeMillis()
             thumbFromRecording = true
         } catch (e: Exception) {
@@ -486,6 +499,7 @@ class MainActivity : ComponentActivity() {
     private fun setVideoMode(video: Boolean) {
         if (wantRecording) return
         videoMode = video
+        if (video) maybeAskMic()
         paintMode()
     }
 
@@ -531,6 +545,7 @@ class MainActivity : ComponentActivity() {
     private fun installShutter() {
         var holding = false
         val hold = Runnable {
+            maybeAskMic()
             if (feed.running && !wantRecording) {
                 holding = true
                 shutter.video = true
