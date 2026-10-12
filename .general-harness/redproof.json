@@ -385,6 +385,83 @@
       "contract_hash": "27a81033db37a98629f98785f1bf236d96403582ec01282d72816aac0f7b26ee",
       "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
       "confidence": "heuristic"
+    },
+    {
+      "task": "simple",
+      "unit": "simple",
+      "case": "bend-knobs-at-zero-leave-the-picture-alone",
+      "key": "simple/bend-knobs-at-zero-leave-the-picture-alone",
+      "matched_test": "SimpleTest > bend knobs at zero leave the picture alone()",
+      "failed_at": "2026-10-12T11:02:12.171Z",
+      "contract_hash": "a5795cb553ff3402740d8735b7d39af8e59f7ba3ae3497b5e0885e5121dc2919",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "simple",
+      "unit": "simple",
+      "case": "each-bend-knob-gets-stronger-as-it-turns",
+      "key": "simple/each-bend-knob-gets-stronger-as-it-turns",
+      "matched_test": "SimpleTest > each bend knob gets stronger as it turns()",
+      "failed_at": "2026-10-12T11:02:12.171Z",
+      "contract_hash": "a5795cb553ff3402740d8735b7d39af8e59f7ba3ae3497b5e0885e5121dc2919",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "simple",
+      "unit": "simple",
+      "case": "dither-knobs-pick-basic-styles-palettes-and-sizes",
+      "key": "simple/dither-knobs-pick-basic-styles-palettes-and-sizes",
+      "matched_test": "SimpleTest > dither knobs pick basic styles palettes and sizes()",
+      "failed_at": "2026-10-12T11:02:12.171Z",
+      "contract_hash": "a5795cb553ff3402740d8735b7d39af8e59f7ba3ae3497b5e0885e5121dc2919",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "simple",
+      "unit": "simple",
+      "case": "photos-have-no-overlay",
+      "key": "simple/photos-have-no-overlay",
+      "matched_test": "SimpleTest > photos have no overlay()",
+      "failed_at": "2026-10-12T11:02:12.171Z",
+      "contract_hash": "a5795cb553ff3402740d8735b7d39af8e59f7ba3ae3497b5e0885e5121dc2919",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "simple",
+      "unit": "simple",
+      "case": "overlay-goes-through-the-tape-filter",
+      "key": "simple/overlay-goes-through-the-tape-filter",
+      "matched_test": "SimpleTest > overlay goes through the tape filter()",
+      "failed_at": "2026-10-12T11:02:12.171Z",
+      "contract_hash": "a5795cb553ff3402740d8735b7d39af8e59f7ba3ae3497b5e0885e5121dc2919",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "simple",
+      "unit": "simple",
+      "case": "portrait-frames-are-upright",
+      "key": "simple/portrait-frames-are-upright",
+      "matched_test": "SimpleTest > portrait frames are upright()",
+      "failed_at": "2026-10-12T11:02:12.171Z",
+      "contract_hash": "a5795cb553ff3402740d8735b7d39af8e59f7ba3ae3497b5e0885e5121dc2919",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "simple",
+      "unit": "simple",
+      "case": "date-and-time-never-overlap",
+      "key": "simple/date-and-time-never-overlap",
+      "matched_test": "SimpleTest > date and time never overlap()",
+      "failed_at": "2026-10-12T11:02:12.171Z",
+      "contract_hash": "a5795cb553ff3402740d8735b7d39af8e59f7ba3ae3497b5e0885e5121dc2919",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
     }
   ]
 }

@@ -11,7 +11,7 @@
     },
     {
       "id": "P2",
-      "text": "The photo you take is exactly the frame the viewfinder showed - overlay, bends and all - just scaled up with hard pixel edges.",
+      "text": "The photo you take is exactly the frame the viewfinder showed - bends and all, minus the camcorder overlay - just scaled up with hard pixel edges.",
       "observable_by": "a test named \"photo is the viewfinder frame scaled up\" passes"
     },
     {
@@ -39,7 +39,7 @@
         },
         {
           "id": "photo-is-the-viewfinder-frame-scaled-up",
-          "description": "capture output at scale k equals each viewfinder pixel repeated k x k",
+          "description": "with no overlay showing, capture output at scale k equals each viewfinder pixel repeated k x k (overlay removal itself is covered by simple/photos-have-no-overlay)",
           "maps_to_clause": "P2"
         },
         {

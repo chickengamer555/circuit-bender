@@ -3,89 +3,77 @@ package com.chickengamer.circuitbender
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
-import android.media.MediaScannerConnection
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import com.chickengamer.circuitbender.core.Photo
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 /**
- * Writes a captured frame to Pictures/CircuitBender as a lossless PNG.
- * Runs on a background thread; returns null on any failure rather than
- * throwing, and never leaves a half-written entry in the gallery.
+ * Puts photos (lossless PNG) in Pictures/CircuitBender and videos in
+ * Movies/CircuitBender. Runs on a background thread; returns null on any
+ * failure and never leaves a half-written entry in the gallery.
  */
 object PhotoSaver {
     private const val TAG = "PhotoSaver"
 
+    private fun stamp() = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
+
     fun save(context: Context, photo: Photo): Uri? {
         val bmp = Bitmap.createBitmap(photo.pixels, photo.width, photo.height, Bitmap.Config.ARGB_8888)
-        val name = "CB_" + SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date()) + ".png"
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) saveMediaStore(context, bmp, name) else saveLegacy(context, bmp, name)
-        } catch (e: IOException) {
-            Log.e(TAG, "saving $name failed", e)
-            null
-        } catch (e: SecurityException) {
-            Log.e(TAG, "no permission to save $name", e)
-            null
+        try {
+            return publish(context, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "CB_${stamp()}.png", "image/png", Environment.DIRECTORY_PICTURES) {
+                bmp.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
         } finally {
             bmp.recycle()
         }
     }
 
-    private fun saveMediaStore(context: Context, bmp: Bitmap, name: String): Uri? {
-        val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/CircuitBender")
-            put(MediaStore.Images.Media.IS_PENDING, 1)
+    /** Moves a finished recording into the gallery and deletes the temp file. */
+    fun saveVideo(context: Context, file: File): Uri? = try {
+        publish(context, MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "CB_${stamp()}.mp4", "video/mp4", Environment.DIRECTORY_MOVIES) { out ->
+            file.inputStream().use { it.copyTo(out) }
+            true
         }
+    } finally {
+        file.delete()
+    }
+
+    private fun publish(context: Context, collection: Uri, name: String, mime: String, dir: String, write: (OutputStream) -> Boolean): Uri? {
         val resolver = context.contentResolver
-        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "$dir/CircuitBender")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = try {
+            resolver.insert(collection, values)
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "cannot create $name", e)
+            null
+        } ?: return null
         var written = false
         try {
-            written = resolver.openOutputStream(uri)?.use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) } ?: false
+            written = resolver.openOutputStream(uri)?.use(write) ?: false
+        } catch (e: IOException) {
+            Log.e(TAG, "writing $name failed", e)
         } finally {
             if (written) {
                 values.clear()
-                values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                values.put(MediaStore.MediaColumns.IS_PENDING, 0)
                 resolver.update(uri, values, null, null)
             } else {
                 resolver.delete(uri, null, null)
             }
         }
         return if (written) uri else null
-    }
-
-    /** Android 8-9: write the file directly (needs WRITE_EXTERNAL_STORAGE), then index it. */
-    private fun saveLegacy(context: Context, bmp: Bitmap, name: String): Uri? {
-        @Suppress("DEPRECATION") // the only public API for shared pictures before Q
-        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "CircuitBender")
-        if (!dir.isDirectory && !dir.mkdirs()) throw IOException("cannot create $dir")
-        val file = File(dir, name)
-        val ok = FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        if (!ok) {
-            file.delete()
-            return null
-        }
-        // Ask the media scanner for a content:// uri so the gallery can open it.
-        var uri: Uri? = null
-        val done = CountDownLatch(1)
-        MediaScannerConnection.scanFile(context, arrayOf(file.path), arrayOf("image/png")) { _, scanned ->
-            uri = scanned
-            done.countDown()
-        }
-        done.await(5, TimeUnit.SECONDS)
-        return uri ?: Uri.fromFile(file)
     }
 }

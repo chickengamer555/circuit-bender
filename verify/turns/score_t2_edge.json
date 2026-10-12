@@ -1,0 +1,67 @@
+{
+  "turn": 2,
+  "verdict": "revise",
+  "stance": "edge-case-hawk",
+  "method_note": "Scratch copy only (scratchpad/edge); the project is untouched apart from this file. Probe 1 ran every Resolution (CAMCORDER, LOFI, GAME_BOY) through Pipeline.process with VHS on (SP/LP/EP, tracking 0 and 1, so scaledVhs is exercised), bend on, and these inputs: HSYNC stride -40,-39,-1,1,39,40; address bit 4..17 LOW/HIGH; VSYNC -12,-11.9,0.2,12; crosstalk bit 0..7 x period 0..6; ADC gain 0.2 and 4; an all-bends-at-once rack (every SCCB mode, pclk 1, jpeg 1, brownout 1, stride -40, A17 HIGH, vsync -12). Frames used were 0, 1, 7, 1e6 and Long.MAX/4. It also ran all 12 algorithms x all 9 palettes plus a 2-colour and a 1-colour palette, capture() at each resolution, OSD dates in year 10000, year -5 and year 999999999 with counter Long.MIN/Long.MAX, and CameraSampler at 1x1, 2x2, 3x5, 64x48, 176x144, 641x481, 1920x1080 and 4000x3000 with rotations 0, 90, 180, 270, -90, 450, -270, 720 and 45 into every resolution. Result: no exception on any user-reachable input. The only throw was rotation 45 (13 AIOOBE). Probe 2 checked the address line for frozen or no-op output. Two mutants were run against the full suite: R/B swapped in the colour LUT lookup, and scaledVhs always returning the 320x240 numbers. Both survived.",
+  "turn1_resolution": {
+    "tautology": "Mostly resolved. Every diffusion kernel, Atkinson and Burkes/Sierra Lite included, is now checked against an independent published-kernel oracle. The BAYER_4 k/16 sweep pins scale, centring and orientation. The Game Boy Camera table is pinned at every threshold edge. FieldError SWAP/DROP are exact. The VHS tiny-frames red proof is re-recorded with a class-qualified match. Still open from turn 1: (a) colour-palette nearest-colour quality is untested; a fresh mutant swapping R and B in nearestRgb's LUT index survives the whole suite and recolours every PICO-8/CGA/EGA picture. (b) BAYER_2, BAYER_8 and CLUSTER_DOT have no tone sweep. (c) Byte slip, crosstalk and SCCB still have no semantics pinned.",
+    "failure": "Not re-audited in depth (that is app-layer, out of this stance). Spot check: CameraFeed.deliver now catches RuntimeException per frame and PhotoSaver catches IOException/SecurityException, consistent with the commit message."
+  },
+  "findings": [
+    {
+      "case_or_area": "OSD date/time stamp at GAME_BOY resolution",
+      "file": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Osd.kt",
+      "line": 166,
+      "input": "Resolution.GAME_BOY (128x112; also the app's Game Boy preset, MainActivity.kt:504) with showDate=true and any ordinary date, e.g. 2026-10-12 22:48:03",
+      "result": "scaleFor(112)=1 and mx=10. The time is drawn at x=[10,75) and the date at x=[53,118), so 22 px overlap. Time is drawn second, so its outline and glyphs overwrite the date: the stamp burned into every Game Boy frame and photo is garbled. LOFI has a 6 px gap that closes for 5-digit years (time ends at 77, date starts at 77). CAMCORDER collides only at year 10000 (155 vs 153).",
+      "suggested_fix": "When textWidth(time)+textWidth(date)+gap > width-2*mx, stack the stamp (date on the bottom line, time on the line above, both right-aligned) or drop the seconds. Add an OSD probe: for every Resolution, the bounding boxes of the date and time strings do not intersect (including 'DEC.31 10000')."
+    },
+    {
+      "case_or_area": "Stuck address line beyond the frame buffer at small resolutions",
+      "file": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Bend.kt",
+      "line": 330,
+      "input": "GAME_BOY with addressBit 15, 16 or 17; LOFI with addressBit 16 or 17 (UI cycle 4..17; the random GLITCH button picks 8..16, MainActivity.kt:531)",
+      "result": "HIGH: every target address is >= mem.size, so no byte is ever written and the bend output is identical every frame. The camera image freezes on the last clean frame while VHS noise keeps moving, which looks like a hung camera. LOW: addr and not(bit) == addr, an exact no-op (the knob does nothing). Confirmed by probe: frozen=true / noop=true for exactly these 10 combinations. CAMCORDER at A17 HIGH is only partly affected.",
+      "suggested_fix": "Map the UI bit onto the buffer: effective bit = min(addressBit, highestBit(bytes.size-1)), or wrap target modulo mem.size, so every setting does something live. Add a probe: for each Resolution and each UI address bit/mode, output changes when the input changes and differs from a bypass."
+    },
+    {
+      "case_or_area": "Colour palette matching (PICO-8, CGA, EGA)",
+      "file": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Dither.kt",
+      "line": 255,
+      "input": "Mutant: rgbLut[(bi shl 11) or (gi shl 5) or ri] (R and B swapped in the lookup)",
+      "result": "Survives the full core suite. Every colour-palette dither would put blues for reds and the gate would stay green. The turn-1 finding is still open.",
+      "suggested_fix": "For each colour palette and every algorithm, a flat image of each palette colour must come back unchanged, and a flat pure red/green/blue must map to the palette's nearestRgbExact choice."
+    },
+    {
+      "case_or_area": "Pipeline at LOFI / GAME_BOY (scaledVhs)",
+      "file": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Pipeline.kt",
+      "line": 153,
+      "input": "Mutant: scaledVhs returns v unchanged at every size",
+      "result": "Survives. No test runs Pipeline at a non-320x240 resolution, so the chroma divisor, delay, jitter and head-switch scaling are unverified. Today's code doesn't crash at these sizes (probe 1), but the likely regression is unwatched.",
+      "suggested_fix": "Parameterise one pipeline test over Resolution.entries: no exception with everything on, output size w*h, the head-switch band height ~ 7*h/240 rows at the bottom, and the chroma edge width scaling with w."
+    },
+    {
+      "case_or_area": "CameraSampler with a non-right-angle rotation",
+      "file": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Pipeline.kt",
+      "line": 34,
+      "input": "rotationDegrees = 45 (or any value that is not a multiple of 90 after floorMod)",
+      "result": "uw/uh are swapped, but the when() falls through to the identity mapping, giving ArrayIndexOutOfBoundsException for any non-square frame. Not reachable today: CameraX rotationDegrees is always 0/90/180/270, and -90, 450, -270 and 720 all work. Lowest priority.",
+      "suggested_fix": "Snap rot to the nearest multiple of 90 (((rot + 45) / 90 % 4) * 90), or treat any other value as 0 for both the uw/uh choice and the mapping."
+    }
+  ],
+  "solid": [
+    "No crash on any user-reachable bend setting at any resolution, alone or all at once, including frame counters near Long.MAX/4. floorMod and coerceIn guards hold everywhere.",
+    "Dither handles 1-, 2-, 4- and 16-colour palettes in all 12 algorithms. GAME_BOY_CAMERA's level map (shade*(n-1)/3) stays in range for n=1 and n=2.",
+    "CameraSampler is safe for frames smaller than the output (taps clamp to 1), 1x1 frames, odd sizes and every right-angle rotation, including negative and >360 values.",
+    "Stamp handles year 10000, negative years, and Long.MIN/Long.MAX counters without exception.",
+    "BendEngine state (memory, previous, lastClean) resets on a resolution change, so switching resolutions mid-session cannot mix buffer sizes."
+  ],
+  "gaps_the_gate_cannot_see": [
+    "Pipeline is never run at LOFI or GAME_BOY in tests, though both are one tap away in the UI (and one is the Game Boy preset). Layout bugs like the stamp overlap and scaling bugs in scaledVhs are invisible to the gate.",
+    "'Every control changes the picture' (B6) is only checked at one bit/size, so a setting that is a dead no-op or a freeze at another resolution passes.",
+    "Colour-palette matching quality (only palette membership is checked).",
+    "OSD layout collisions between elements; only the position of each element on its own is checked.",
+    "Exceptions on the camera thread are swallowed per frame (CameraFeed.kt:140), so a deterministic core exception would show up only as a frozen viewfinder plus logcat lines. The gate has no Pipeline sweep that asserts 'no throw' over the UI's actual setting ranges x resolutions. My probe 1 is that sweep and it is green today."
+  ],
+  "highest_impact_change": "Add one Resolution-parameterised pipeline probe. For every Resolution, sweep the UI ranges (stride -40..40, address 4..17 x LOW/HIGH, vsync +-12, crosstalk period 0..6, gain 0.2/4, all-at-once) and assert three things: no throw, the bend output changes between two different input frames (catches the A15-17 freeze), and the date and time stamp boxes do not intersect. Then fix the GAME_BOY stamp layout, which fails that check today on every frame."
+}

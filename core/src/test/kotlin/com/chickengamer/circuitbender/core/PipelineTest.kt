@@ -98,7 +98,8 @@ class PipelineTest {
         val (w, h) = Resolution.CAMCORDER.width to Resolution.CAMCORDER.height
         val src = IntArray(w * h) { (0xFF shl 24) or (it * 2654435761L.toInt() ushr 8) }
         val settings = PipelineSettings(bendEnabled = true, bend = BendSettings(strideOffset = 3))
-        val shown = pipeline.process(src, settings, osd, frame = 12)
+        // With no overlay on screen, the photo is exactly what was shown.
+        val shown = pipeline.process(src, settings, null, frame = 12, clean = true)
         val k = 3
         val photo = pipeline.capture(k)
         assertEquals(w * k, photo.width)

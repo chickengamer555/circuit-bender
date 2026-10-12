@@ -114,6 +114,11 @@ class CameraFeed(
         analysis?.targetRotation = rotation
     }
 
+    /** Run [task] on the camera thread, after any frame in progress. */
+    fun post(task: () -> Unit) {
+        executor.execute(task)
+    }
+
     fun shutdown() {
         executor.shutdown()
     }

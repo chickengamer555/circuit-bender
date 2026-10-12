@@ -87,9 +87,9 @@ object CameraSampler {
 
 /** Working "sensor" sizes. */
 enum class Resolution(val width: Int, val height: Int, val label: String) {
-    CAMCORDER(320, 240, "VHS 320x240"),
-    LOFI(160, 120, "Toy cam 160x120"),
-    GAME_BOY(128, 112, "Game Boy 128x112"),
+    CAMCORDER(320, 240, "320x240"),
+    LOFI(160, 120, "160x120"),
+    GAME_BOY(128, 112, "128x112"),
 }
 
 data class PipelineSettings(
@@ -101,49 +101,67 @@ data class PipelineSettings(
     val ditherEnabled: Boolean = false,
     val algorithm: DitherAlgorithm = DitherAlgorithm.BAYER_4,
     val palette: Palette = Palettes.GAME_BOY,
-)
+    val portrait: Boolean = false,
+) {
+    /** Held upright the 4:3 sensor becomes 3:4. */
+    val width: Int get() = if (portrait) resolution.height else resolution.width
+    val height: Int get() = if (portrait) resolution.width else resolution.height
+}
 
 class Photo(val width: Int, val height: Int, val pixels: IntArray)
 
 /**
- * camera -> bend -> date stamp -> VHS -> dither -> viewfinder overlay.
- * The date stamp goes in before the tape (camcorders record it into the
- * video, so it bleeds like everything else); the viewfinder indicators go on
- * last, after dithering, in palette colours when dithering is on.
+ * camera -> bend -> overlay -> VHS -> dither.
+ * The camcorder overlay goes in before the tape so it gets the same look as
+ * the picture, but only on the viewfinder copy: the clean copy, used for
+ * photos and video, never has it.
  */
 class Pipeline(private val seed: Long = 1) {
     private val bend = BendEngine(seed)
-    private var last: IntArray? = null
-    private var lastW = 0
-    private var lastH = 0
+    private var clean: IntArray? = null
+    private var cleanW = 0
+    private var cleanH = 0
 
-    fun process(src: IntArray, settings: PipelineSettings, osd: OsdState, frame: Long): IntArray {
-        val w = settings.resolution.width
-        val h = settings.resolution.height
+    /**
+     * Render one frame and return the viewfinder picture. With [clean] set,
+     * also keep an overlay-free copy for [capture].
+     */
+    fun process(src: IntArray, settings: PipelineSettings, osd: OsdState?, frame: Long, clean: Boolean = false): IntArray {
+        val w = settings.width
+        val h = settings.height
         require(src.size == w * h) { "frame is ${src.size} px, expected ${w}x$h" }
 
-        var px = if (settings.bendEnabled) bend.process(src, w, h, settings.bend, frame) else src.copyOf()
-        Osd.drawStamp(px, w, h, osd)
-        if (settings.vhsEnabled) px = Vhs.process(px, w, h, scaledVhs(settings.vhs, w, h), seed, frame)
-        val palette = if (settings.ditherEnabled) settings.palette else null
-        if (palette != null) px = Dither.apply(px, w, h, settings.algorithm, palette)
-        Osd.drawViewfinder(px, w, h, osd, palette)
-
-        last = px
-        lastW = w
-        lastH = h
-        return px
+        val bent = if (settings.bendEnabled) bend.process(src, w, h, settings.bend, frame) else src.copyOf()
+        val preview = if (osd != null) {
+            val withOverlay = bent.copyOf()
+            Osd.drawStamp(withOverlay, w, h, osd)
+            Osd.drawViewfinder(withOverlay, w, h, osd)
+            finish(withOverlay, settings, w, h, frame)
+        } else {
+            finish(bent, settings, w, h, frame)
+        }
+        this.clean = if (!clean) null else if (osd == null) preview else finish(bent, settings, w, h, frame)
+        cleanW = w
+        cleanH = h
+        return preview
     }
 
-    /** The last viewfinder frame, scaled up by [scale] with hard pixel edges. */
+    private fun finish(px: IntArray, settings: PipelineSettings, w: Int, h: Int, frame: Long): IntArray {
+        var out = px
+        if (settings.vhsEnabled) out = Vhs.process(out, w, h, scaledVhs(settings.vhs, w, h), seed, frame)
+        if (settings.ditherEnabled) out = Dither.apply(out, w, h, settings.algorithm, settings.palette)
+        return out
+    }
+
+    /** The last overlay-free frame (see [process]), scaled up by [scale] with hard pixel edges. */
     fun capture(scale: Int): Photo {
-        val src = last ?: return Photo(0, 0, IntArray(0))
+        val src = clean ?: return Photo(0, 0, IntArray(0))
         val k = maxOf(1, scale)
-        val w = lastW * k
-        val h = lastH * k
+        val w = cleanW * k
+        val h = cleanH * k
         val out = IntArray(w * h)
         for (y in 0 until h) {
-            val row = (y / k) * lastW
+            val row = (y / k) * cleanW
             for (x in 0 until w) out[y * w + x] = src[row + x / k]
         }
         return Photo(w, h, out)
@@ -152,7 +170,7 @@ class Pipeline(private val seed: Long = 1) {
     /** The VHS numbers are for 320x240; keep them physically the same at other sizes. */
     private fun scaledVhs(v: VhsSettings, w: Int, h: Int): VhsSettings {
         if (w == 320 && h == 240) return v
-        val sx = w / 320f
+        val sx = maxOf(w, h) / 320f
         return v.copy(
             chromaDivisor = maxOf(2, (v.chromaDivisor * sx).roundToInt()),
             chromaDelayPx = v.chromaDelayPx * sx,

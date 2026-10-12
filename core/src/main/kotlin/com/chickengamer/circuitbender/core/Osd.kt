@@ -94,13 +94,40 @@ object Font5x7 {
     fun glyph(c: Char): IntArray? = GLYPHS[c.uppercaseChar()]
 }
 
+/** A screen rectangle, [left, right) x [top, bottom). */
+data class Box(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
 object Osd {
+    /**
+     * Where the date (first) and time (second) go: date bottom-right, time
+     * bottom-left, or, when the frame is too narrow for both on one line,
+     * the time right-aligned on the line above the date.
+     */
+    fun stampBoxes(width: Int, height: Int, state: OsdState): List<Box> {
+        val s = scaleFor(height)
+        val mx = width * 8 / 100
+        val my = height * 8 / 100
+        val lineH = Font5x7.HEIGHT * s
+        val dw = textWidth(Stamp.date(state.dateTime), s)
+        val tw = textWidth(Stamp.time(state.dateTime), s)
+        val y = height - my - lineH
+        val dateBox = Box(width - mx - dw, y, width - mx, y + lineH)
+        val gap = 4 * s
+        val timeBox = if (mx + tw + gap <= dateBox.left) {
+            Box(mx, y, mx + tw, y + lineH)
+        } else {
+            val y2 = y - lineH - 3 * s
+            Box(width - mx - tw, y2, width - mx, y2 + lineH)
+        }
+        return listOf(dateBox, timeBox)
+    }
+
     private const val WHITE = 0xFFFFFFFF.toInt()
     private const val BLACK = 0xFF000000.toInt()
     private const val RED = 0xFFE01010.toInt()
 
     /** OSD pixel scale: 2 at 240 lines, like a real CG on a 480i picture. */
-    fun scaleFor(height: Int) = maxOf(1, height / 120)
+    fun scaleFor(height: Int) = maxOf(1, minOf(height, 240) / 120)
 
     private fun plot(dst: IntArray, w: Int, h: Int, x: Int, y: Int, c: Int) {
         if (x in 0 until w && y in 0 until h) dst[y * w + x] = c
@@ -159,12 +186,9 @@ object Osd {
         if (!state.showDate || width <= 0 || height <= 0) return
         val s = scaleFor(height)
         val ink = ink(palette)
-        val mx = width * 8 / 100
-        val my = height * 8 / 100
-        val y = height - my - Font5x7.HEIGHT * s
-        val date = Stamp.date(state.dateTime)
-        drawText(dst, width, height, date, width - mx - textWidth(date, s), y, ink.fg, ink.outline, s)
-        drawText(dst, width, height, Stamp.time(state.dateTime), mx, y, ink.fg, ink.outline, s)
+        val (dateBox, timeBox) = stampBoxes(width, height, state)
+        drawText(dst, width, height, Stamp.date(state.dateTime), dateBox.left, dateBox.top, ink.fg, ink.outline, s)
+        drawText(dst, width, height, Stamp.time(state.dateTime), timeBox.left, timeBox.top, ink.fg, ink.outline, s)
     }
 
     /** Viewfinder-only indicators: tally dot and REC/STBY, tape speed, battery, counter. */

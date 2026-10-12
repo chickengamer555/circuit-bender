@@ -14,26 +14,26 @@ data class VhsSettings(
     /** Blend toward a 3-tap low-pass: ~3 MHz luma at 320 px is only a gentle blur. */
     val lumaSmear: Float = 0.5f,
     /** Edge-enhancement (peaking) gain; gives the 10-30% overshoot halo. */
-    val sharpen: Float = 0.8f,
+    val sharpen: Float = 0.5f,
     /** Luma pixels per chroma sample: 320 / 40 = 8 for VHS colour-under. */
     val chromaDivisor: Int = 8,
     /** Chroma trails luma by ~300 ns, about 2 px at 320 wide. */
     val chromaDelayPx: Float = 2f,
-    val saturation: Float = 1.1f,
-    val lumaNoise: Float = 0.01f,
-    val chromaNoise: Float = 0.1f,
+    val saturation: Float = 1.05f,
+    val lumaNoise: Float = 0.005f,
+    val chromaNoise: Float = 0.04f,
     /** RF dropout specks per pixel (ntsc-rs default). */
-    val snow: Float = 0.00025f,
+    val snow: Float = 0.0001f,
     /** Expected dropout streaks per frame / 2. */
-    val dropouts: Float = 0.3f,
+    val dropouts: Float = 0.1f,
     /** Time-base error: peak per-line horizontal wobble. */
-    val jitterPx: Float = 1f,
+    val jitterPx: Float = 0.4f,
     /** Height of the head-switching band in rows (absolute, at this frame size). */
-    val headSwitchLines: Int = 7,
+    val headSwitchLines: Int = 4,
     /** 0..1 mistracking: a noisy, displaced band that crawls up the picture. */
     val tracking: Float = 0f,
-    /** Interline CCD vertical smear from highlights. */
-    val ccdSmear: Float = 0.05f,
+    /** Interline CCD vertical smear from clipped highlights. */
+    val ccdSmear: Float = 0.01f,
 ) {
     /** The deterministic part only: bandwidth, delay, sharpening and colour. */
     fun noiseless(): VhsSettings = copy(
@@ -87,9 +87,11 @@ object Vhs {
             }
         }
 
-        if (s.ccdSmear > 0f) ccdSmear(yp, w, h, s.ccdSmear)
-
         Parallel.rows(h) { from, to -> luma(yp, w, from, to, s) }
+
+        // Smear is charge in the CCD's vertical register, not image detail:
+        // it goes on after the peaking so it is not sharpened into stripes.
+        if (s.ccdSmear > 0f) ccdSmear(yp, src, w, h, s.ccdSmear)
 
         // Chroma: ~40 samples per line, vertically averaged over two lines,
         // delayed to the right.
@@ -155,16 +157,24 @@ object Vhs {
         }
     }
 
-    /** Charge from clipped highlights leaks into the vertical register: whole-column streaks. */
-    private fun ccdSmear(yp: FloatArray, w: Int, h: Int, k: Float) {
+    /**
+     * Charge from clipped highlights leaks into the vertical register:
+     * whole-column streaks. Only light near clipping counts (measured on the
+     * sensor image, before any processing), and a column can only brighten
+     * so far.
+     */
+    private fun ccdSmear(yp: FloatArray, src: IntArray, w: Int, h: Int, k: Float) {
         for (x in 0 until w) {
             var excess = 0f
-            for (y in 0 until h) excess += maxOf(0f, yp[y * w + x] - 200f)
+            for (y in 0 until h) excess += maxOf(0f, luma(src[y * w + x]) - CLIP)
             if (excess <= 0f) continue
-            val add = k * excess
+            val add = minOf(SMEAR_CAP, k * excess * 0.5f)
             for (y in 0 until h) yp[y * w + x] += add
         }
     }
+
+    private const val CLIP = 235f
+    private const val SMEAR_CAP = 60f
 
     private fun chroma(c: FloatArray, w: Int, h: Int, divisor: Int, delay: Float) {
         val d = maxOf(1, divisor)
