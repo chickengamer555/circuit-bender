@@ -8,8 +8,8 @@ object Knobs {
     /**
      * NOISE: data lines shorted through pots, sparkle growing into
      * posterisation. TEAR: the pixel-clock pot past its knee, then a lost
-     * HSYNC slant. COLOUR: analog gain, a Bayer phase slip, crossed lines, a
-     * byte slip. MEMORY: an intermittent stuck frame-buffer address line -
+     * HSYNC slant. COLOUR: pots on the chroma data lines - colour sparkle that
+     * grows steadily into solid false colour. MEMORY: an intermittent stuck frame-buffer address line -
      * repeated blocks and ghosts of earlier frames. ROLL: lost VSYNC. BLOCKS:
      * JPEG bit errors.
      */
@@ -31,15 +31,17 @@ object Knobs {
             lines[3] = DataLine(LineMode.LOW, pot = 1f - n * 0.8f)
             lines[6] = DataLine(LineMode.HIGH, pot = 1f - n * 0.35f)
         }
+        val chroma = MutableList(8) { DataLine() }
+        if (c > 0f) {
+            chroma[6] = DataLine(LineMode.HIGH, pot = 1f - c)
+            chroma[4] = DataLine(LineMode.LOW, pot = 1f - c * 0.8f)
+            chroma[7] = DataLine(LineMode.HIGH, pot = 1f - c * 0.5f)
+        }
         return BendSettings(
             dataLines = lines,
+            chromaLines = chroma,
             pixelClockPot = if (t > 0f) BendSettings.PCLK_KNEE + 0.5f * t else 0f,
             strideOffset = if (t > 0.5f) ((t - 0.5f) / 0.5f * 10f).toInt() else 0,
-            adcGain = 1f + c * 1.2f,
-            bayerPhase = if (c >= 0.33f) BayerPhase.SHIFT_X else BayerPhase.NONE,
-            crossA = if (c >= 0.66f) 7 else 0,
-            crossB = if (c >= 0.66f) 5 else 0,
-            bytePhaseSlip = c >= 0.9f,
             addressMode = if (m > 0f) LineMode.LOW else LineMode.OFF,
             addressBit = -(1 + (m * 6f).toInt()),
             addressDuty = 0.3f + 0.6f * m,

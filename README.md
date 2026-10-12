@@ -16,9 +16,10 @@ Tap **VHS**, **Bend** or **Dither** to switch an effect on or off. **Adjust** op
 - Pinch to zoom.
 - Double-tap to flip camera.
 - Swipe left/right for VIDEO/PHOTO.
-- Hold the shutter to record a clip.
+- Hold the shutter in PHOTO mode to record a clip.
 - Volume buttons take the shot.
 - Long-press an effect chip to open its settings.
+- The corners button (top bar) opens clean view: only the picture, full screen. Use it to share the screen in a call, or to capture into OBS (via scrcpy) as a virtual webcam on a PC. Tap to leave.
 
 The screen stays upright like a stock camera: turn the phone and the shot becomes landscape, while the picture and buttons rotate to match.
 

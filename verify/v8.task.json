@@ -1,0 +1,29 @@
+{
+  "task": "v8",
+  "title": "Colour bend that responds across its whole range",
+  "description": "The COLOUR bend knob did almost nothing below ~60%: its real faults switched on in steps at 33% and 66%. It now drives a pot on the sensor's chroma data lines (U/V bytes of the YUV422 bus), so colour corruption grows steadily from the first notch, with the step faults (Bayer slip, crossed lines, byte slip) kept for the top of the range.",
+  "tier": "quick",
+  "clauses": [
+    {
+      "id": "C1",
+      "text": "The COLOUR knob visibly changes the colours from 10% on and keeps getting stronger all the way up - no dead zone at the bottom and no sudden jump only near the top.",
+      "observable_by": "a test named \"colour knob responds across its range\" passes"
+    },
+    {
+      "id": "C2",
+      "text": "The chroma-line bend touches only colour: on a grey picture's bus it leaves every brightness byte alone.",
+      "observable_by": "a test named \"chroma lines leave brightness alone\" passes"
+    }
+  ],
+  "units": [
+    {
+      "id": "v8",
+      "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/Bend.kt",
+      "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/V8Test.kt",
+      "cases": [
+        { "id": "colour-knob-responds-across-its-range", "description": "colour error vs input at knob 0.1/0.25/0.5/0.75/1.0 strictly increases, 0.1 is visible, and 0.25 already reaches a quarter of the full effect", "maps_to_clause": "C1" },
+        { "id": "chroma-lines-leave-brightness-alone", "description": "Bus.applyChromaLines with hard shorts on a packed grey frame changes only U/V bytes (odd byte offsets), never Y bytes", "probe": true, "maps_to_clause": "C2" }
+      ]
+    }
+  ]
+}

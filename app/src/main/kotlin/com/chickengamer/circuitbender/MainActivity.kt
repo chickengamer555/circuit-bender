@@ -128,6 +128,9 @@ class MainActivity : ComponentActivity() {
     private val chips = mutableMapOf<Tab, TextView>()
     private val turning = mutableListOf<View>()
     private var sheet: View? = null
+    private lateinit var topBar: View
+    private lateinit var bottomPanel: View
+    private var clean = false
     private var sheetTab = Tab.VHS
     private var torch = false
     private var lastUri: Uri? = null
@@ -397,6 +400,13 @@ class MainActivity : ComponentActivity() {
         }
         top.addView(readout, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         top.addView(iconButton(R.drawable.ic_tune) { toggleSheet() }, FrameLayout.LayoutParams(icon, icon, Gravity.END or Gravity.CENTER_VERTICAL))
+        top.addView(
+            iconButton(R.drawable.ic_fullscreen) { setClean(true) },
+            FrameLayout.LayoutParams(icon, icon, Gravity.END or Gravity.CENTER_VERTICAL).apply {
+                rightMargin = icon + Retro.dp(this@MainActivity, 12f)
+            },
+        )
+        topBar = top
         root.addView(top, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
 
         // Bottom panel: effect chips, PHOTO / VIDEO, then thumbnail, shutter, flip.
@@ -462,11 +472,12 @@ class MainActivity : ComponentActivity() {
         }
         bottom.addView(captureRow)
         root.addView(bottom, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+        bottomPanel = bottom
         paintMode()
 
         // Keep the picture in the space between the bars.
         val fit = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            viewfinder.setPictureArea(top.height, bottom.height)
+            if (!clean) viewfinder.setPictureArea(top.height, bottom.height)
         }
         top.addOnLayoutChangeListener(fit)
         bottom.addOnLayoutChangeListener(fit)
@@ -483,6 +494,29 @@ class MainActivity : ComponentActivity() {
             while (from - to > 180) to += 360
             v.animate().rotation(to).setDuration(200).start()
         }
+    }
+
+    /**
+     * Clean view: just the picture, full screen, no buttons - for sharing the
+     * screen in a call or capturing it into OBS. Tap or press back to leave.
+     */
+    private fun setClean(on: Boolean) {
+        clean = on
+        closeSheet()
+        val vis = if (on) View.GONE else View.VISIBLE
+        topBar.visibility = vis
+        bottomPanel.visibility = vis
+        if (on) {
+            viewfinder.setPictureArea(0, 0)
+            Toast.makeText(this, "Tap to show controls", Toast.LENGTH_SHORT).show()
+        } else {
+            viewfinder.setPictureArea(topBar.height, bottomPanel.height)
+        }
+    }
+
+    @Deprecated("Back button: leave clean view before leaving the app")
+    override fun onBackPressed() {
+        if (clean) setClean(false) else super.onBackPressed()
     }
 
     private fun paintChips() {
@@ -545,8 +579,11 @@ class MainActivity : ComponentActivity() {
     private fun installShutter() {
         var holding = false
         val hold = Runnable {
-            maybeAskMic()
-            if (feed.running && !wantRecording) {
+            // The permission dialog would steal the touch and end the clip at
+            // once, so ask first and record on the next hold.
+            if (!micGranted() && !micAsked) {
+                maybeAskMic()
+            } else if (feed.running && !wantRecording) {
                 holding = true
                 shutter.video = true
                 setRecording(true)
@@ -557,7 +594,9 @@ class MainActivity : ComponentActivity() {
                 MotionEvent.ACTION_DOWN -> {
                     v.isPressed = true
                     holding = false
-                    v.postDelayed(hold, 450)
+                    // Holding records a clip only from PHOTO mode; in VIDEO mode
+                    // every press simply starts or stops, however long it lasts.
+                    if (!videoMode) v.postDelayed(hold, 500)
                 }
                 MotionEvent.ACTION_UP -> {
                     v.isPressed = false
@@ -616,6 +655,10 @@ class MainActivity : ComponentActivity() {
             }
 
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (clean) {
+                    setClean(false)
+                    return true
+                }
                 if (sheet != null) {
                     closeSheet()
                     return true

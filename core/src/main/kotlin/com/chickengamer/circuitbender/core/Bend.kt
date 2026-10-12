@@ -33,6 +33,8 @@ data class DataLine(val mode: LineMode = LineMode.OFF, val pot: Float = 0f) {
 /** Every bend point on the rack. Defaults are a stock, unmodified camera. */
 data class BendSettings(
     val dataLines: List<DataLine> = List(8) { DataLine() },
+    /** Lines that only bite on colour (U/V) bytes - see [Bus.applyChromaLines]. */
+    val chromaLines: List<DataLine> = List(8) { DataLine() },
     val bridge: BridgeMode = BridgeMode.OFF,
     val bridgeA: Int = 6,
     val bridgeB: Int = 7,
@@ -70,7 +72,7 @@ data class BendSettings(
     val brownout: Float = 0f,
 ) {
     internal val busActive: Boolean
-        get() = dataLines.any { it.active } || bridge != BridgeMode.OFF || crossA != crossB ||
+        get() = dataLines.any { it.active } || chromaLines.any { it.active } || bridge != BridgeMode.OFF || crossA != crossB ||
             crosstalkBit in 0..7 || bytePhaseSlip
     internal val timingActive: Boolean get() = pixelClockPot > PCLK_KNEE || strideOffset != 0
     internal val addressActive: Boolean get() = addressMode != LineMode.OFF
@@ -104,6 +106,29 @@ object Bus {
                     val b = bytes[i].toInt()
                     bytes[i] = (if (high) b or mask else b and mask.inv()).toByte()
                 }
+            }
+        }
+    }
+
+    /**
+     * Like [applyDataLines], but the short only acts while the bus carries a
+     * colour byte (U or V, the odd bytes of Y0 U Y1 V): a pot on a line the
+     * DSP samples on the chroma phase of the clock. Brightness is untouched.
+     */
+    fun applyChromaLines(bytes: ByteArray, lines: List<DataLine>, rnd: Random, from: Int = 0, to: Int = bytes.size) {
+        for ((bit, line) in lines.withIndex()) {
+            if (!line.active || bit > 7) continue
+            val mask = 1 shl bit
+            val p = 1f - line.pot.coerceIn(0f, 1f)
+            val high = line.mode == LineMode.HIGH
+            val threshold = (p * 65536f).toInt()
+            var i = from or 1
+            while (i < to) {
+                if (p >= 1f || (rnd.nextInt() and 0xFFFF) < threshold) {
+                    val b = bytes[i].toInt()
+                    bytes[i] = (if (high) b or mask else b and mask.inv()).toByte()
+                }
+                i += 2
             }
         }
     }
@@ -260,6 +285,11 @@ class BendEngine(private val seed: Long = 1) {
                 val bus = bytes
                 Parallel.rows(h) { a, b ->
                     for (y in a until b) Bus.applyDataLines(bus, s.dataLines, rowRng(2, y), y * lb, (y + 1) * lb)
+                }
+                if (s.chromaLines.any { it.active }) {
+                    Parallel.rows(h) { a, b ->
+                        for (y in a until b) Bus.applyChromaLines(bus, s.chromaLines, rowRng(4, y), y * lb, (y + 1) * lb)
+                    }
                 }
                 Bus.bridge(bytes, s.bridgeA, s.bridgeB, s.bridge)
                 Bus.swap(bytes, s.crossA, s.crossB)

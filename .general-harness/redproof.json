@@ -638,6 +638,28 @@
       "contract_hash": null,
       "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
       "confidence": "heuristic"
+    },
+    {
+      "task": "v8",
+      "unit": "v8",
+      "case": "colour-knob-responds-across-its-range",
+      "key": "v8/colour-knob-responds-across-its-range",
+      "matched_test": "V8Test > colour knob responds across its range()",
+      "failed_at": "2026-10-12T20:52:36.468Z",
+      "contract_hash": "b49d43be6c9b8ca529e118e9e5ed77934431a18fdd8edc78ed17702c0dc55907",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v8",
+      "unit": "v8",
+      "case": "chroma-lines-leave-brightness-alone",
+      "key": "v8/chroma-lines-leave-brightness-alone",
+      "matched_test": "V8Test > chroma lines leave brightness alone()",
+      "failed_at": "2026-10-12T20:52:36.468Z",
+      "contract_hash": "b49d43be6c9b8ca529e118e9e5ed77934431a18fdd8edc78ed17702c0dc55907",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
     }
   ]
 }
