@@ -234,7 +234,7 @@ class BendEngine(private val seed: Long = 1) {
         val rnd = Random(seed * 0x5DEECE66DL + frame * 0x2545F491L + 11)
         // Per-row streams let row work run in parallel and stay reproducible.
         val rowSeed = seed * 0x5DEECE66DL + frame * 0x2545F491L + 0x9E3779B9L
-        fun rowRng(salt: Int, y: Int) = Random(rowSeed + salt * 0x10001L + y * 0x632BE5ABL)
+        fun rowRng(salt: Int, y: Int): Random = FastRandom(rowSeed + salt * 0x10001L + y * 0x632BE5ABL)
         var px = src.copyOf()
 
         // --- Sensor and its ISP -------------------------------------------------
@@ -338,9 +338,25 @@ class BendEngine(private val seed: Long = 1) {
         val n = if (s.addressBit < 0) maxOf(0, top + 1 + s.addressBit) else s.addressBit
         val bit = if (n in 0..30) 1 shl n else 0
         val high = s.addressMode == LineMode.HIGH
-        for (addr in bytes.indices) {
-            val target = if (high) addr or bit else addr and bit.inv()
-            if (target < mem.size) mem[target] = bytes[addr]
+        // Writing every address in order through the stuck line comes down to
+        // whole blocks of 2^n bytes: with the line low each block whose bit is
+        // set lands on the block before it (the later write wins); with it high
+        // each block whose bit is clear lands on the block after it, which then
+        // overwrites it with its own data. Unreached blocks keep stale memory.
+        if (bit == 0 || bit >= mem.size) {
+            if (!high || bit == 0) System.arraycopy(bytes, 0, mem, 0, bytes.size)
+        } else {
+            var start = 0
+            while (start < bytes.size) {
+                val len = minOf(bit, bytes.size - start)
+                val bitSet = start and bit != 0
+                when {
+                    high && bitSet -> System.arraycopy(bytes, start, mem, start, len)
+                    !high && !bitSet -> System.arraycopy(bytes, start, mem, start, len)
+                    !high && bitSet -> System.arraycopy(bytes, start, mem, start - bit, len)
+                }
+                start += bit
+            }
         }
         memory = mem
         return mem.copyOf()
@@ -557,4 +573,26 @@ class BendEngine(private val seed: Long = 1) {
             return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
         }
     }
+}
+
+/**
+ * xorshift64*: much cheaper per draw than the default generator, which
+ * matters when a bend draws a random number for every byte of a frame.
+ */
+internal class FastRandom(seed: Long) : Random() {
+    private var state = (seed xor 0x2545F4914F6CDD1DL).let { if (it == 0L) 0x9E3779B97F4A7C15uL.toLong() else it }
+
+    override fun nextLong(): Long {
+        var x = state
+        x = x xor (x ushr 12)
+        x = x xor (x shl 25)
+        x = x xor (x ushr 27)
+        state = x
+        return x * 0x2545F4914F6CDD1DL
+    }
+
+    override fun nextInt(): Int = (nextLong() ushr 32).toInt()
+
+    override fun nextBits(bitCount: Int): Int =
+        if (bitCount == 0) 0 else (nextLong() ushr (64 - bitCount)).toInt()
 }

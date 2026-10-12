@@ -78,9 +78,9 @@ object Vhs {
         if (w <= 0 || h <= 0) return out
         val s = settings
 
-        val yp = FloatArray(n)
-        val up = FloatArray(n)
-        val vp = FloatArray(n)
+        val yp = scratch(0, n)
+        val up = scratch(1, n)
+        val vp = scratch(2, n)
         val su = 0.492f * s.saturation
         val sv = 0.877f * s.saturation
         Parallel.rows(h) { from, to ->
@@ -119,14 +119,13 @@ object Vhs {
         val gain = 1f - lift / 255f
         val cx = (w - 1) / 2f
         val cy = (h - 1) / 2f
+        val half = s.vignette * 0.5f
+        val colTerm = FloatArray(w) { val d = (it - cx) / maxOf(1f, cx); half * d * d }
+        val rowTerm = FloatArray(h) { val d = (it - cy) / maxOf(1f, cy); half * d * d }
         Parallel.rows(h) { from, to ->
             for (i in from * w until to * w) {
                 var y = yp[i]
-                if (s.vignette > 0f) {
-                    val dx = (i % w - cx) / maxOf(1f, cx)
-                    val dy = (i / w - cy) / maxOf(1f, cy)
-                    y *= 1f - s.vignette * 0.5f * (dx * dx + dy * dy)
-                }
+                if (half > 0f) y *= 1f - colTerm[i % w] - rowTerm[i / w]
                 y = lift + y * gain
                 val u = up[i]
                 val v = vp[i]
@@ -137,6 +136,20 @@ object Vhs {
             }
         }
         return out
+    }
+
+    /**
+     * Per-thread working planes, kept between frames: at 640x480 the chain
+     * would otherwise allocate megabytes per frame, and on a phone that
+     * garbage costs stutter and heat. Every user overwrites what it reads.
+     */
+    private val pool = ThreadLocal.withInitial { arrayOfNulls<FloatArray>(6) }
+
+    private fun scratch(slot: Int, size: Int): FloatArray {
+        val slots = pool.get()
+        val a = slots[slot]
+        if (a != null && a.size == size) return a
+        return FloatArray(size).also { slots[slot] = it }
     }
 
     /** Round and clamp to 0..255 without roundToInt's NaN handling. */
@@ -184,12 +197,18 @@ object Vhs {
      * so far.
      */
     private fun ccdSmear(yp: FloatArray, src: IntArray, w: Int, h: Int, k: Float) {
-        for (x in 0 until w) {
-            var excess = 0f
-            for (y in 0 until h) excess += maxOf(0f, luma(src[y * w + x]) - CLIP)
-            if (excess <= 0f) continue
-            val add = minOf(SMEAR_CAP, k * excess * 0.5f)
-            for (y in 0 until h) yp[y * w + x] += add
+        val excess = FloatArray(w)
+        for (y in 0 until h) {
+            val o = y * w
+            for (x in 0 until w) excess[x] += maxOf(0f, luma(src[o + x]) - CLIP)
+        }
+        if (excess.all { it <= 0f }) return
+        val add = FloatArray(w) { if (excess[it] > 0f) minOf(SMEAR_CAP, k * excess[it] * 0.5f) else 0f }
+        Parallel.rows(h) { from, to ->
+            for (y in from until to) {
+                val o = y * w
+                for (x in 0 until w) yp[o + x] += add[x]
+            }
         }
     }
 
@@ -198,8 +217,9 @@ object Vhs {
     /** Separable box blur (radius 4) of everything above the knee, spilled onto darker neighbours. */
     private fun bloom(yp: FloatArray, w: Int, h: Int, amount: Float) {
         val r = 4
-        val bright = FloatArray(w * h) { maxOf(0f, yp[it] - KNEE) }
-        val tmp = FloatArray(w * h)
+        val bright = scratch(3, w * h)
+        for (i in 0 until w * h) bright[i] = maxOf(0f, yp[i] - KNEE)
+        val tmp = scratch(4, w * h)
         val norm = 1f / (2 * r + 1)
         // Running sums: constant cost per pixel whatever the radius.
         Parallel.rows(h) { from, to ->
@@ -234,7 +254,7 @@ object Vhs {
     private fun chroma(c: FloatArray, w: Int, h: Int, divisor: Int, delay: Float) {
         val d = maxOf(1, divisor)
         val samples = (w + d - 1) / d
-        val smooth = FloatArray(samples * h)
+        val smooth = scratch(5, samples * h)
         // Pass 1: decimate each line to ~40 samples and low-pass them.
         Parallel.rows(h) { from, to ->
             val dec = FloatArray(samples)

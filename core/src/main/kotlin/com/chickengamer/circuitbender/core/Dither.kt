@@ -341,22 +341,25 @@ object Dither {
         val cells = (n * n).toFloat()
         val offsets = FloatArray(m.size) { p.spread * ((m[it] + 0.5f) / cells - 0.5f) }
         val lut = if (p.monochrome) p.lumaLut else null
-        for (y in 0 until h) {
-            val row = (y % n) * n
-            for (x in 0 until w) {
-                val t = offsets[row + x % n]
-                val c = src[y * w + x]
-                dst[y * w + x] = if (lut != null) {
-                    lut[lumaIndex(luma(c) + t)]
-                } else {
-                    p.colors[
-                        nearestRgb(
-                            p,
-                            ((c shr 16) and 0xFF) + t,
-                            ((c shr 8) and 0xFF) + t,
-                            (c and 0xFF) + t,
-                        ),
-                    ]
+        // Every pixel is independent, so rows split across cores.
+        Parallel.rows(h) { from, to ->
+            for (y in from until to) {
+                val row = (y % n) * n
+                for (x in 0 until w) {
+                    val t = offsets[row + x % n]
+                    val c = src[y * w + x]
+                    dst[y * w + x] = if (lut != null) {
+                        lut[lumaIndex(luma(c) + t)]
+                    } else {
+                        p.colors[
+                            nearestRgb(
+                                p,
+                                ((c shr 16) and 0xFF) + t,
+                                ((c shr 8) and 0xFF) + t,
+                                (c and 0xFF) + t,
+                            ),
+                        ]
+                    }
                 }
             }
         }
@@ -375,71 +378,101 @@ object Dither {
      */
     private fun gameBoyCamera(src: IntArray, w: Int, h: Int, p: Palette, dst: IntArray) {
         val levels = p.colors.size
-        for (y in 0 until h) for (x in 0 until w) {
-            val cell = ((y and 3) * 4 + (x and 3)) * 3
-            // The cartridge compares 8-bit ADC readings, so compare integers:
-            // a float luma of 185.99998 must not miss a threshold of 186.
-            val c = src[y * w + x]
-            val v = (77 * ((c shr 16) and 0xFF) + 150 * ((c shr 8) and 0xFF) + 29 * (c and 0xFF) + 128) shr 8
-            val m = GAME_BOY_CAMERA_MATRIX
-            val shade = when {
-                v < m[cell] -> 0
-                v < m[cell + 1] -> 1
-                v < m[cell + 2] -> 2
-                else -> 3
+        val m = GAME_BOY_CAMERA_MATRIX
+        Parallel.rows(h) { from, to ->
+            for (y in from until to) for (x in 0 until w) {
+                val cell = ((y and 3) * 4 + (x and 3)) * 3
+                // The cartridge compares 8-bit ADC readings, so compare integers:
+                // a float luma of 185.99998 must not miss a threshold of 186.
+                val c = src[y * w + x]
+                val v = (77 * ((c shr 16) and 0xFF) + 150 * ((c shr 8) and 0xFF) + 29 * (c and 0xFF) + 128) shr 8
+                val shade = when {
+                    v < m[cell] -> 0
+                    v < m[cell + 1] -> 1
+                    v < m[cell + 2] -> 2
+                    else -> 3
+                }
+                dst[y * w + x] = p.colors[p.byLuma[(shade * (levels - 1) / 3f).roundToInt()]]
             }
-            dst[y * w + x] = p.colors[p.byLuma[(shade * (levels - 1) / 3f).roundToInt()]]
         }
     }
 
-    /** Serpentine error diffusion, mirroring the kernel on right-to-left rows. */
+    /**
+     * Serpentine error diffusion, mirroring the kernel on right-to-left rows.
+     *
+     * Only three rows are ever live (no kernel reaches further down), so the
+     * working values sit in a ring of three padded rows: no bounds checks,
+     * little memory. Each row is loaded before any error reaches it, so every
+     * value accumulates in exactly the textbook order.
+     */
     private fun diffuse(src: IntArray, w: Int, h: Int, k: Kernel, p: Palette, dst: IntArray) {
-        val channels = if (p.monochrome) 1 else 3
-        val buf = Array(channels) { FloatArray(w * h) }
-        for (i in src.indices) {
-            val c = src[i]
-            if (p.monochrome) {
-                buf[0][i] = luma(c)
+        val pad = 2
+        val stride = w + 2 * pad
+        val mono = p.monochrome
+        val ring = if (mono) arrayOf(FloatArray(stride * 3)) else Array(3) { FloatArray(stride * 3) }
+        val n = k.taps.size / 3
+        val tdx = IntArray(n) { k.taps[it * 3] }
+        val tdy = IntArray(n) { k.taps[it * 3 + 1] }
+        val tw = FloatArray(n) { k.taps[it * 3 + 2] / k.divisor }
+
+        fun load(y: Int) {
+            if (y >= h) return
+            val o = (y % 3) * stride + pad
+            val row = y * w
+            if (mono) {
+                val b = ring[0]
+                for (x in 0 until w) b[o + x] = luma(src[row + x])
             } else {
-                buf[0][i] = ((c shr 16) and 0xFF).toFloat()
-                buf[1][i] = ((c shr 8) and 0xFF).toFloat()
-                buf[2][i] = (c and 0xFF).toFloat()
+                val r = ring[0]
+                val g = ring[1]
+                val bl = ring[2]
+                for (x in 0 until w) {
+                    val c = src[row + x]
+                    r[o + x] = ((c shr 16) and 0xFF).toFloat()
+                    g[o + x] = ((c shr 8) and 0xFF).toFloat()
+                    bl[o + x] = (c and 0xFF).toFloat()
+                }
             }
         }
-        val err = FloatArray(channels)
-        val taps = k.taps
+        load(0)
+        load(1)
+
+        val rowOff = IntArray(3)
         for (y in 0 until h) {
+            load(y + 2)
+            for (d in 0..2) rowOff[d] = ((y + d) % 3) * stride + pad
             val ltr = y % 2 == 0
+            val here = rowOff[0]
             for (step in 0 until w) {
                 val x = if (ltr) step else w - 1 - step
-                val i = y * w + x
-                val chosen: Int
-                if (p.monochrome) {
+                val dir = if (ltr) 1 else -1
+                if (mono) {
+                    val b = ring[0]
                     // Clamp so runaway error cannot leave a long trail after a hard edge.
-                    val v = buf[0][i].coerceIn(-128f, 383f)
+                    val v = b[here + x].coerceIn(-128f, 383f)
                     val li = nearestLuma(p, v)
-                    chosen = p.byLuma[li]
-                    err[0] = v - p.lumas[li]
+                    dst[y * w + x] = p.colors[p.byLuma[li]]
+                    val e = v - p.lumas[li]
+                    for (t in 0 until n) b[rowOff[tdy[t]] + x + dir * tdx[t]] += e * tw[t]
                 } else {
-                    val r = buf[0][i].coerceIn(-128f, 383f)
-                    val g = buf[1][i].coerceIn(-128f, 383f)
-                    val b = buf[2][i].coerceIn(-128f, 383f)
-                    chosen = nearestRgb(p, r, g, b)
-                    err[0] = r - p.r[chosen]
-                    err[1] = g - p.g[chosen]
-                    err[2] = b - p.b[chosen]
-                }
-                dst[i] = p.colors[chosen]
-                var t = 0
-                while (t < taps.size) {
-                    val nx = x + if (ltr) taps[t] else -taps[t]
-                    val ny = y + taps[t + 1]
-                    if (nx in 0 until w && ny < h) {
-                        val f = taps[t + 2] / k.divisor
-                        val j = ny * w + nx
-                        for (ch in 0 until channels) buf[ch][j] += err[ch] * f
+                    val rb = ring[0]
+                    val gb = ring[1]
+                    val bb = ring[2]
+                    val r = rb[here + x].coerceIn(-128f, 383f)
+                    val g = gb[here + x].coerceIn(-128f, 383f)
+                    val bv = bb[here + x].coerceIn(-128f, 383f)
+                    val chosen = nearestRgb(p, r, g, bv)
+                    dst[y * w + x] = p.colors[chosen]
+                    val er = r - p.r[chosen]
+                    val eg = g - p.g[chosen]
+                    val eb = bv - p.b[chosen]
+                    for (t in 0 until n) {
+                        val j = rowOff[tdy[t]] + x + dir * tdx[t]
+                        val f = tw[t]
+                        rb[j] += er * f
+                        gb[j] += eg * f
+                        bb[j] += eb * f
                     }
-                    t += 3
                 }
             }
         }
