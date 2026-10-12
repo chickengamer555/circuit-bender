@@ -605,6 +605,28 @@
       "contract_hash": "29a5ac191b688af015ecb141246f4fe1a9c5dc4e0bb60e95f194861599d1edc7",
       "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
       "confidence": "heuristic"
+    },
+    {
+      "task": "v6",
+      "unit": "v6",
+      "case": "steady-frames-reuse-their-buffers",
+      "key": "v6/steady-frames-reuse-their-buffers",
+      "matched_test": "V6Test > steady frames reuse their buffers()",
+      "failed_at": "2026-10-12T11:53:58.872Z",
+      "contract_hash": "ca341e5a360ab98ed848ca4bb9d392da23ee032bb148e1e3742083a4439aab35",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v6",
+      "unit": "v6",
+      "case": "pacer-caps-rate-and-busy-time-and-backs-off-when-hot",
+      "key": "v6/pacer-caps-rate-and-busy-time-and-backs-off-when-hot",
+      "matched_test": "V6Test > pacer caps rate and busy time and backs off when hot()",
+      "failed_at": "2026-10-12T11:53:58.872Z",
+      "contract_hash": "ca341e5a360ab98ed848ca4bb9d392da23ee032bb148e1e3742083a4439aab35",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
     }
   ]
 }

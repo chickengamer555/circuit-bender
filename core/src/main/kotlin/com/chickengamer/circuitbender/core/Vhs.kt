@@ -70,11 +70,18 @@ object Vhs {
     private fun rng(seed: Long, frame: Long, effect: Int) =
         Random(seed * 0x9E3779B97F4A7C15uL.toLong() + frame * 1_000_003L + effect * 7919L)
 
-    fun process(src: IntArray, width: Int, height: Int, settings: VhsSettings, seed: Long, frame: Long): IntArray {
+    fun process(
+        src: IntArray,
+        width: Int,
+        height: Int,
+        settings: VhsSettings,
+        seed: Long,
+        frame: Long,
+        out: IntArray = IntArray(src.size),
+    ): IntArray {
         val w = width
         val h = height
         val n = w * h
-        val out = IntArray(src.size)
         if (w <= 0 || h <= 0) return out
         val s = settings
 

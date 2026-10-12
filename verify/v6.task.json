@@ -1,0 +1,29 @@
+{
+  "task": "v6",
+  "title": "Cool and steady: no per-frame garbage, paced frames",
+  "description": "Heavy settings (640x480 dither) made the phone lag and run hot: every frame allocated megabytes and the effects ran flat out on every core. Frames now reuse their buffers, and a pacer caps the frame rate and the share of time spent processing, lowering both when the phone reports heat.",
+  "tier": "quick",
+  "clauses": [
+    {
+      "id": "G1",
+      "text": "Once running, a 640x480 dither-plus-VHS frame reuses the same picture buffers frame after frame instead of allocating new ones, while the previous frame's picture stays intact until the next one is done.",
+      "observable_by": "a test named \"steady frames reuse their buffers\" passes"
+    },
+    {
+      "id": "G2",
+      "text": "The frame pacer never runs faster than its frame-rate cap, keeps processing to at most its share of the time (so cores get to rest), and lowers the cap when the phone says it is getting hot.",
+      "observable_by": "a test named \"pacer caps rate and busy time and backs off when hot\" passes"
+    }
+  ],
+  "units": [
+    {
+      "id": "v6",
+      "surface": "core/src/main/kotlin/com/chickengamer/circuitbender/core/FramePacer.kt",
+      "tests": "core/src/test/kotlin/com/chickengamer/circuitbender/core/V6Test.kt",
+      "cases": [
+        { "id": "steady-frames-reuse-their-buffers", "description": "frames N and N+2 return the same array object (double-buffered), frame N+1 a different one, and frame N's pixels are unchanged after frame N+1", "maps_to_clause": "G1" },
+        { "id": "pacer-caps-rate-and-busy-time-and-backs-off-when-hot", "description": "simulated 60 fps camera: cheap frames are capped at 30 fps; 40 ms frames are spaced so busy share <= 60%; thermal 'moderate' halves the cap; 'severe' quarters it", "probe": true, "maps_to_clause": "G2" }
+      ]
+    }
+  ]
+}

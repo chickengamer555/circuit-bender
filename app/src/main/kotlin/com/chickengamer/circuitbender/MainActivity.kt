@@ -10,6 +10,8 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.BatteryManager
+import android.os.PowerManager
+import android.os.SystemClock
 import android.os.Bundle
 import android.util.Log
 import android.view.GestureDetector
@@ -35,6 +37,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.chickengamer.circuitbender.core.CameraSampler
+import com.chickengamer.circuitbender.core.FramePacer
 import com.chickengamer.circuitbender.core.Knobs
 import com.chickengamer.circuitbender.core.OsdState
 import com.chickengamer.circuitbender.core.Photo
@@ -101,6 +104,15 @@ class MainActivity : ComponentActivity() {
     @Volatile private var lastSensor = intArrayOf(0, 0, 0, 3, 4) // w, h, rotation, aspectW, aspectH
 
     private val pipeline = Pipeline(seed = System.nanoTime())
+    private val pacer = FramePacer(maxFps = 30, maxBusy = 0.6f)
+    private var sampleBuf: IntArray? = null // camera thread only
+
+    /** The phone reports its temperature; the pacer slows down as it warms up. */
+    private val thermalListener = PowerManager.OnThermalStatusChangedListener { status ->
+        val was = pacer.thermal
+        pacer.thermal = status
+        if (status >= FramePacer.MODERATE && was < FramePacer.MODERATE) showReadout("Phone warm - slowing down")
+    }
     private val io = Executors.newSingleThreadExecutor()
 
     private lateinit var feed: CameraFeed
@@ -167,6 +179,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (orientation.canDetectOrientation()) orientation.enable()
+        val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+        pacer.thermal = power.currentThermalStatus
+        power.addThermalStatusListener(thermalListener)
         val pct = (getSystemService(Context.BATTERY_SERVICE) as BatteryManager).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         battery = when {
             pct > 66 -> 3
@@ -179,6 +194,7 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         orientation.disable()
+        (getSystemService(Context.POWER_SERVICE) as PowerManager).removeThermalStatusListener(thermalListener)
         // The camera stops delivering frames while paused: close the file now.
         if (wantRecording) {
             wantRecording = false
@@ -215,6 +231,14 @@ class MainActivity : ComponentActivity() {
     )
 
     private fun onFrame(planes: YuvPlanes, sensorRotation: Int) {
+        // Skip frames the pacer says to, unless a photo is waiting.
+        val start = SystemClock.uptimeMillis()
+        if (!photoRequested.get() && !pacer.shouldProcess(start)) return
+        render(planes, sensorRotation)
+        pacer.finished(start, SystemClock.uptimeMillis() - start)
+    }
+
+    private fun render(planes: YuvPlanes, sensorRotation: Int) {
         if (wantRecording && recorder == null) recordRotation = deviceRotation
         // A recording keeps the orientation it started with.
         val held = if (wantRecording || recorder != null) recordRotation else deviceRotation
@@ -224,7 +248,8 @@ class MainActivity : ComponentActivity() {
         val front = feed.lensFacing == CameraSelector.LENS_FACING_FRONT
         val rot = CameraSampler.sampleRotation(sensorRotation, held, front)
         lastSensor = intArrayOf(planes.width, planes.height, rot, s.displayWidth, s.displayHeight)
-        val px = CameraSampler.sample(planes, rot, w, h, s.displayWidth, s.displayHeight)
+        val px = CameraSampler.sample(planes, rot, w, h, s.displayWidth, s.displayHeight, sampleBuf)
+        sampleBuf = px
         if (front) for (y in 0 until h) px.reverse(y * w, y * w + w)
 
         if (wantRecording && recorder == null) startRecording(s)

@@ -75,8 +75,9 @@ object CameraSampler {
         outHeight: Int,
         aspectW: Int = outWidth,
         aspectH: Int = outHeight,
+        dst: IntArray? = null,
     ): IntArray {
-        val out = IntArray(outWidth * outHeight)
+        val out = dst?.takeIf { it.size == outWidth * outHeight } ?: IntArray(outWidth * outHeight)
         if (outWidth <= 0 || outHeight <= 0 || planes.width <= 0 || planes.height <= 0) return out
         val rot = Math.floorMod(rotationDegrees, 360)
         val sw = planes.width
@@ -218,8 +219,22 @@ class Pipeline(private val seed: Long = 1) {
     private var smooth = true
 
     /**
+     * Picture buffers kept between frames: at 640x480 each is over a
+     * megabyte, and allocating several per frame keeps a phone's garbage
+     * collector - and its CPU - busy. The viewfinder copy alternates between
+     * two sets so the previous frame stays intact until the next is done.
+     */
+    private val buffers = HashMap<String, IntArray>()
+    private var parity = 0
+
+    private fun buffer(name: String, size: Int): IntArray =
+        buffers[name]?.takeIf { it.size == size } ?: IntArray(size).also { buffers[name] = it }
+
+    /**
      * Render one frame and return the viewfinder picture. With [clean] set,
-     * also keep an overlay-free copy for [capture].
+     * also keep a copy for [capture]: overlay-free, or - with [keepOverlay] -
+     * exactly the viewfinder picture. The returned array is reused two
+     * frames later; [src] is never modified.
      */
     fun process(
         src: IntArray,
@@ -231,38 +246,45 @@ class Pipeline(private val seed: Long = 1) {
     ): IntArray {
         val w = settings.width
         val h = settings.height
-        require(src.size == w * h) { "frame is ${src.size} px, expected ${w}x$h" }
+        val n = w * h
+        require(src.size == n) { "frame is ${src.size} px, expected ${w}x$h" }
+        parity = 1 - parity
+        val set = "p$parity"
 
-        val bent = if (settings.bendEnabled) bend.process(src, w, h, settings.bend, frame) else src.copyOf()
+        val bent = if (settings.bendEnabled) bend.process(src, w, h, settings.bend, frame) else src
         val preview = if (osd != null) {
-            val withOverlay = bent.copyOf()
+            val withOverlay = buffer("$set-overlay", n)
+            System.arraycopy(bent, 0, withOverlay, 0, n)
             Osd.drawStamp(withOverlay, w, h, osd, aspect = settings.pixelAspect)
             Osd.drawViewfinder(withOverlay, w, h, osd, aspect = settings.pixelAspect)
-            finish(withOverlay, settings, w, h, frame)
+            finish(withOverlay, settings, w, h, frame, set)
         } else {
-            finish(bent, settings, w, h, frame)
+            finish(bent, settings, w, h, frame, set)
         }
         this.clean = when {
             !clean -> null
             osd == null || keepOverlay -> preview
-            else -> finish(bent, settings, w, h, frame)
+            else -> finish(bent, settings, w, h, frame, "clean")
         }
         cleanW = w
         cleanH = h
         displayW = settings.displayWidth
         displayH = settings.displayHeight
         smooth = !settings.ditherEnabled
-        return preview
+        return if (preview === src) preview.copyOf() else preview
     }
 
-    private fun finish(px: IntArray, settings: PipelineSettings, w: Int, h: Int, frame: Long): IntArray {
+    private fun finish(px: IntArray, settings: PipelineSettings, w: Int, h: Int, frame: Long, set: String): IntArray {
+        val n = w * h
         var out = px
-        if (settings.vhsEnabled) out = Vhs.process(out, w, h, scaledVhs(settings.vhs, w, h), seed, frame)
+        if (settings.vhsEnabled) {
+            out = Vhs.process(out, w, h, scaledVhs(settings.vhs, w, h), seed, frame, buffer("$set-vhs", n))
+        }
         if (settings.ditherEnabled) {
             if (settings.ditherContrast != 1f || settings.ditherBrightness != 0f) {
-                out = tone(out, settings.ditherContrast, settings.ditherBrightness)
+                out = tone(out, settings.ditherContrast, settings.ditherBrightness, buffer("$set-tone", n))
             }
-            out = Dither.apply(out, w, h, settings.algorithm, settings.palette)
+            out = Dither.apply(out, w, h, settings.algorithm, settings.palette, buffer("$set-dither", n))
         }
         return out
     }
@@ -287,16 +309,22 @@ class Pipeline(private val seed: Long = 1) {
         return Photo(w, h, px)
     }
 
-    private fun tone(px: IntArray, c: Float, b: Float): IntArray = IntArray(px.size) { i ->
-        val p = px[i]
+    private fun tone(px: IntArray, c: Float, b: Float, dst: IntArray): IntArray {
         fun ch(v: Int) = ((v - 128) * c + 128f + b).toInt().coerceIn(0, 255)
-        (0xFF shl 24) or (ch((p shr 16) and 0xFF) shl 16) or (ch((p shr 8) and 0xFF) shl 8) or ch(p and 0xFF)
+        for (i in px.indices) {
+            val p = px[i]
+            dst[i] = (0xFF shl 24) or (ch((p shr 16) and 0xFF) shl 16) or (ch((p shr 8) and 0xFF) shl 8) or ch(p and 0xFF)
+        }
+        return dst
     }
 
     /** The last overlay-free frame (see [process]), scaled up by [scale] with hard pixel edges. */
     fun capture(scale: Int): Photo {
         val src = clean ?: return Photo(0, 0, IntArray(0))
-        val k = maxOf(1, scale)
+        // At scale 1 hand over the frame itself (valid until the next
+        // process call) rather than copying a megabyte per video frame.
+        if (scale <= 1) return Photo(cleanW, cleanH, src)
+        val k = scale
         val w = cleanW * k
         val h = cleanH * k
         val out = IntArray(w * h)

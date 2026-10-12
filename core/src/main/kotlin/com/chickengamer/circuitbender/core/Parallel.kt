@@ -9,11 +9,19 @@ import java.util.concurrent.Future
  * split: the thread count changes speed, never pixels.
  */
 internal object Parallel {
-    private val workers = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(0, 5)
+    // Three helpers at most, at low priority: lighting up every core buys
+    // little on memory-bound loops but costs a phone heat, and the UI thread
+    // must never have to wait behind the effects.
+    private val workers = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(0, 3)
     private val pool = if (workers == 0) {
         null
     } else {
-        Executors.newFixedThreadPool(workers) { r -> Thread(r, "circuitbender-worker").apply { isDaemon = true } }
+        Executors.newFixedThreadPool(workers) { r ->
+            Thread(r, "circuitbender-worker").apply {
+                isDaemon = true
+                priority = Thread.MIN_PRIORITY + 1
+            }
+        }
     }
 
     /** Run [block] over row ranges [from, to) covering 0 until [rows]. */
