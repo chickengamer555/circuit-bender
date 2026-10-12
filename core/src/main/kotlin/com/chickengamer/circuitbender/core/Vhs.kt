@@ -200,25 +200,31 @@ object Vhs {
         val r = 4
         val bright = FloatArray(w * h) { maxOf(0f, yp[it] - KNEE) }
         val tmp = FloatArray(w * h)
+        val norm = 1f / (2 * r + 1)
+        // Running sums: constant cost per pixel whatever the radius.
         Parallel.rows(h) { from, to ->
             for (y in from until to) {
                 val o = y * w
+                var sum = 0f
+                for (k in 0..minOf(w - 1, r)) sum += bright[o + k]
                 for (x in 0 until w) {
-                    var sum = 0f
-                    for (k in maxOf(0, x - r)..minOf(w - 1, x + r)) sum += bright[o + k]
-                    tmp[o + x] = sum / (2 * r + 1)
+                    tmp[o + x] = sum * norm
+                    if (x + r + 1 < w) sum += bright[o + x + r + 1]
+                    if (x - r >= 0) sum -= bright[o + x - r]
                 }
             }
         }
-        Parallel.rows(h) { from, to ->
-            for (y in from until to) {
-                for (x in 0 until w) {
-                    var sum = 0f
-                    for (k in maxOf(0, y - r)..minOf(h - 1, y + r)) sum += tmp[k * w + x]
+        Parallel.rows(w) { from, to ->
+            for (x in from until to) {
+                var sum = 0f
+                for (k in 0..minOf(h - 1, r)) sum += tmp[k * w + x]
+                for (y in 0 until h) {
+                    val i = y * w + x
                     // Glow spills from bright areas into darker surroundings;
                     // inside a flat bright area there is nothing to spill into.
-                    val i = y * w + x
-                    yp[i] += amount * maxOf(0f, sum / (2 * r + 1) - bright[i])
+                    yp[i] += amount * maxOf(0f, sum * norm - bright[i])
+                    if (y + r + 1 < h) sum += tmp[(y + r + 1) * w + x]
+                    if (y - r >= 0) sum -= tmp[(y - r) * w + x]
                 }
             }
         }

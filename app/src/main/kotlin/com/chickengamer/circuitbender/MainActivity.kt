@@ -12,7 +12,11 @@ import android.net.Uri
 import android.os.BatteryManager
 import android.os.Bundle
 import android.util.Log
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -35,6 +39,8 @@ import com.chickengamer.circuitbender.core.OsdState
 import com.chickengamer.circuitbender.core.Photo
 import com.chickengamer.circuitbender.core.Pipeline
 import com.chickengamer.circuitbender.core.PipelineSettings
+import com.chickengamer.circuitbender.core.Quality
+import com.chickengamer.circuitbender.core.Resolution
 import com.chickengamer.circuitbender.core.YuvPlanes
 import java.io.File
 import java.time.LocalDateTime
@@ -47,6 +53,8 @@ class MainActivity : ComponentActivity() {
     // --- Effect settings (read by the camera thread) ---------------------------
     @Volatile private var vhsOn = true
     @Volatile private var overlayOn = true
+    @Volatile private var overlayInPhotos = false
+    @Volatile private var quality = 0.5f // VHS SP
     @Volatile private var wear = 0.25f
     @Volatile private var bleed = 0.45f
     @Volatile private var soft = 0.45f
@@ -63,8 +71,9 @@ class MainActivity : ComponentActivity() {
     @Volatile private var ditherOn = false
     @Volatile private var style = 1f / 11 // Bayer 4x4
     @Volatile private var colours = 1f / 13 // 27 natural colours
-    @Volatile private var pixel = 0f
+    @Volatile private var pixel = Resolution.CAMCORDER.ordinal / (Resolution.entries.size - 1f)
     @Volatile private var contrast = 0.5f
+    @Volatile private var brightness = 0.5f
 
     @Volatile private var portrait = false
     @Volatile private var battery = 3
@@ -88,6 +97,9 @@ class MainActivity : ComponentActivity() {
     private val controls = mutableListOf<View>()
     private var shutter: ShutterView? = null
     private var thumb: ImageView? = null
+    private var photoLabel: TextView? = null
+    private var videoLabel: TextView? = null
+    private var zoomLabel: TextView? = null
     private var thumbBitmap: Bitmap? = null
     private var sheet: View? = null
     private var sheetTab = Tab.VHS
@@ -126,8 +138,10 @@ class MainActivity : ComponentActivity() {
 
         feed = CameraFeed(this, ::displayRotation, { msg -> runOnUiThread { viewfinder.message = msg } }, ::onFrame)
         buildControls()
-        viewfinder.setOnClickListener {
-            if (!feed.running && !granted()) askCamera.launch(Manifest.permission.CAMERA)
+        viewfinder.setOnTouchListener { _, e ->
+            pinch.onTouchEvent(e)
+            if (!pinch.isInProgress) gestures.onTouchEvent(e)
+            true
         }
         if (granted()) feed.start() else askCamera.launch(Manifest.permission.CAMERA)
     }
@@ -186,7 +200,11 @@ class MainActivity : ComponentActivity() {
         algorithm = Knobs.ditherStyle(style),
         palette = Knobs.palette(colours),
         ditherContrast = Knobs.contrast(contrast),
+        ditherBrightness = Knobs.brightness(brightness),
+        quality = pick(Quality.entries, quality),
     )
+
+    private fun <T> pick(options: List<T>, k: Float): T = options[(k.coerceIn(0f, 1f) * (options.size - 1) + 0.5f).toInt()]
 
     private fun onFrame(planes: YuvPlanes, rotation: Int) {
         val s = settings()
@@ -215,7 +233,7 @@ class MainActivity : ComponentActivity() {
                 dateTime = LocalDateTime.now(),
             )
         }
-        val shown = pipeline.process(px, s, osd, frame++, clean = takePhoto || recording)
+        val shown = pipeline.process(px, s, osd, frame++, clean = takePhoto || recording, keepOverlay = overlayInPhotos)
         val smooth = !s.ditherEnabled
         viewfinder.post(shown, w, h, s.displayWidth, s.displayHeight, smooth)
 
@@ -313,11 +331,8 @@ class MainActivity : ComponentActivity() {
 
         val photoLabel = Retro.text(this, "PHOTO", 12f)
         val videoLabel = Retro.text(this, "VIDEO", 12f)
-        fun paintMode() {
-            photoLabel.setTextColor(if (videoMode) Retro.MUTED else Retro.ACCENT)
-            videoLabel.setTextColor(if (videoMode) Retro.ACCENT else Retro.MUTED)
-            shutter?.video = videoMode
-        }
+        this.photoLabel = photoLabel
+        this.videoLabel = videoLabel
         val mode = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -327,16 +342,8 @@ class MainActivity : ComponentActivity() {
             addView(photoLabel)
             addView(videoLabel)
         }
-        photoLabel.setOnClickListener {
-            if (!wantRecording) {
-                videoMode = false
-                paintMode()
-            }
-        }
-        videoLabel.setOnClickListener {
-            videoMode = true
-            paintMode()
-        }
+        photoLabel.setOnClickListener { setVideoMode(false) }
+        videoLabel.setOnClickListener { setVideoMode(true) }
 
         val shutterView = ShutterView(this).apply {
             recording = wantRecording
@@ -395,6 +402,82 @@ class MainActivity : ComponentActivity() {
             bar.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> fitViewfinder(bottom = 0, right = v.width) }
         }
         controls += bar
+
+        val zoom = Retro.text(this, "", 14f).apply {
+            background = Retro.rounded(this@MainActivity, 0x99000000.toInt(), 14f)
+            val p = Retro.dp(this@MainActivity, 8f)
+            setPadding(p * 2, p, p * 2, p)
+            alpha = 0f
+        }
+        zoomLabel = zoom
+        root.addView(zoom, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+            topMargin = Retro.dp(this@MainActivity, 24f)
+        })
+        controls += zoom
+    }
+
+    private fun paintMode() {
+        photoLabel?.setTextColor(if (videoMode) Retro.MUTED else Retro.ACCENT)
+        videoLabel?.setTextColor(if (videoMode) Retro.ACCENT else Retro.MUTED)
+        shutter?.video = videoMode
+    }
+
+    /** Switch PHOTO / VIDEO - not while a recording is running. */
+    private fun setVideoMode(video: Boolean) {
+        if (wantRecording) return
+        videoMode = video
+        paintMode()
+    }
+
+    // --- Camera shortcuts: pinch to zoom, double-tap to flip, swipe for photo/video,
+    //     volume keys to shoot -----------------------------------------------------
+
+    private val gestures by lazy {
+        GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent) = true
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                feed.flip()
+                return true
+            }
+
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (!feed.running && !granted()) askCamera.launch(Manifest.permission.CAMERA)
+                return true
+            }
+
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
+                if (kotlin.math.abs(vx) < kotlin.math.abs(vy) * 1.5f) return false
+                setVideoMode(vx < 0) // swipe left for video, right for photo
+                return true
+            }
+        })
+    }
+
+    private val pinch by lazy {
+        ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(d: ScaleGestureDetector): Boolean {
+                val ratio = feed.zoomBy(d.scaleFactor) ?: return true
+                showZoom(ratio)
+                return true
+            }
+        })
+    }
+
+    private fun showZoom(ratio: Float) {
+        val label = zoomLabel ?: return
+        label.text = "%.1fx".format(ratio)
+        label.animate().cancel()
+        label.alpha = 1f
+        label.animate().alpha(0f).setStartDelay(900).setDuration(400).start()
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (event.repeatCount == 0) shoot()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     /** Centre the picture in the space the control bar leaves free. */
@@ -478,6 +561,7 @@ class MainActivity : ComponentActivity() {
                 knobs.addView(Retro.slider(this, "Wear", wear, Retro::percent) { wear = it })
                 knobs.addView(Retro.slider(this, "Colour bleed", bleed, Retro::percent) { bleed = it })
                 knobs.addView(Retro.slider(this, "Softness", soft, Retro::percent) { soft = it })
+                knobs.addView(Retro.slider(this, "Camera quality", quality, { pick(Quality.entries, it).let { q -> "${q.label} (${q.samples})" } }) { quality = it })
                 knobs.addView(Retro.slider(this, "Glow", glow, Retro::percent) { glow = it })
                 val overlay = Retro.chip(this, "") {}
                 fun paintOverlay() {
@@ -491,6 +575,19 @@ class MainActivity : ComponentActivity() {
                 paintOverlay()
                 knobs.addView(overlay, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     topMargin = Retro.dp(this@MainActivity, 12f)
+                })
+                val inPhotos = Retro.chip(this, "") {}
+                fun paintInPhotos() {
+                    inPhotos.text = if (overlayInPhotos) "In photos & video: yes" else "In photos & video: no"
+                    Retro.paintChip(inPhotos, overlayInPhotos)
+                }
+                inPhotos.setOnClickListener {
+                    overlayInPhotos = !overlayInPhotos
+                    paintInPhotos()
+                }
+                paintInPhotos()
+                knobs.addView(inPhotos, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = Retro.dp(this@MainActivity, 8f)
                 })
             }
             Tab.BEND -> {
@@ -506,6 +603,7 @@ class MainActivity : ComponentActivity() {
                 knobs.addView(Retro.slider(this, "Colours", colours, { Knobs.palette(it).name }) { colours = it })
                 knobs.addView(Retro.slider(this, "Pixel size", pixel, { Knobs.pixel(it).label }) { pixel = it })
                 knobs.addView(Retro.slider(this, "Contrast", contrast, { "x%.2f".format(Knobs.contrast(it)) }) { contrast = it })
+                knobs.addView(Retro.slider(this, "Brightness", brightness, { "%+d".format(Knobs.brightness(it).toInt()) }) { brightness = it })
             }
         }
         panel.addView(ScrollView(this).apply { addView(knobs) })

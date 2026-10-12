@@ -129,9 +129,47 @@ object Palettes {
         return Palette("${n * n * n} colours", colors, monochrome = false, spread = step, levels = n)
     }
 
+    /** Commodore 64, Pepto's measured palette. */
+    val C64 = Palette(
+        "C64",
+        intArrayOf(
+            rgb(0x000000), rgb(0xFFFFFF), rgb(0x68372B), rgb(0x70A4B2),
+            rgb(0x6F3D86), rgb(0x588D43), rgb(0x352879), rgb(0xB8C76F),
+            rgb(0x6F4F25), rgb(0x433900), rgb(0x9A6759), rgb(0x444444),
+            rgb(0x6C6C6C), rgb(0x9AD284), rgb(0x6C5EB5), rgb(0x959595),
+        ),
+        spread = 64f,
+    )
+
+    /** ZX Spectrum: 8 colours at normal and bright intensity (black once). */
+    val ZX_SPECTRUM = Palette(
+        "ZX Spectrum",
+        intArrayOf(
+            rgb(0x000000), rgb(0x0000D7), rgb(0xD70000), rgb(0xD700D7),
+            rgb(0x00D700), rgb(0x00D7D7), rgb(0xD7D700), rgb(0xD7D7D7),
+            rgb(0x0000FF), rgb(0xFF0000), rgb(0xFF00FF), rgb(0x00FF00),
+            rgb(0x00FFFF), rgb(0xFFFF00), rgb(0xFFFFFF),
+        ),
+        spread = 96f,
+    )
+
+    /** Virtual Boy: four reds on black. */
+    val VIRTUAL_BOY = Palette(
+        "Virtual Boy",
+        intArrayOf(rgb(0x000000), rgb(0x550000), rgb(0xAA0000), rgb(0xFF0000)),
+        monochrome = true,
+    )
+
+    val SEPIA = Palette(
+        "Sepia",
+        intArrayOf(rgb(0x2B1D0E), rgb(0x6B4A2B), rgb(0xB08A5A), rgb(0xF1DEB3)),
+        monochrome = true,
+    )
+
     val ALL: List<Palette> = listOf(
         ONE_BIT, GAME_BOY, GAME_BOY_BGB, GAME_BOY_POCKET,
         CGA_1_HIGH, CGA_0_HIGH, CGA_5_HIGH, EGA_16, PICO_8,
+        C64, ZX_SPECTRUM, VIRTUAL_BOY, SEPIA,
     )
 }
 

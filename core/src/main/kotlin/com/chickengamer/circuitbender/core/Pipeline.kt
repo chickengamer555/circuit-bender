@@ -97,8 +97,19 @@ object CameraSampler {
     }
 }
 
+/** How good the camcorder is: samples along each line. */
+enum class Quality(val samples: Int, val label: String) {
+    TOY(160, "Toy cam"),
+    VHS_EP(240, "VHS EP"),
+    VHS_SP(320, "VHS SP"),
+    HI8(480, "Hi8"),
+    SHARP(640, "Sharp"),
+}
+
 /** Working "sensor" sizes. */
 enum class Resolution(val width: Int, val height: Int, val label: String) {
+    LARGE(640, 480, "640x480"),
+    BIG(480, 360, "480x360"),
     CAMCORDER(320, 240, "320x240"),
     MID(240, 180, "240x180"),
     LOFI(160, 120, "160x120"),
@@ -118,18 +129,20 @@ data class PipelineSettings(
     val palette: Palette = Palettes.GAME_BOY,
     val portrait: Boolean = false,
     val ditherContrast: Float = 1f,
+    val quality: Quality = Quality.VHS_SP,
+    val ditherBrightness: Float = 0f,
 ) {
     /**
      * Dithered frames are square pixels at the chosen [resolution]. The
-     * camcorder frame is analog: 320 samples along each of 480 lines (VHS's
-     * ~330 x 480), so its pixels are twice as wide as they are tall. Held
-     * upright the picture is 3:4 and the lines are 240 samples long.
+     * camcorder frame is analog: [quality] samples along each of 480 lines
+     * (VHS SP is ~330 x 480), so its samples are wider than its lines. Held
+     * upright the picture is 3:4 and each line is 3/4 as long.
      */
     val width: Int
         get() = when {
             ditherEnabled -> if (portrait) resolution.height else resolution.width
-            portrait -> 240
-            else -> 320
+            portrait -> quality.samples * 3 / 4
+            else -> quality.samples
         }
     val height: Int
         get() = when {
@@ -138,7 +151,10 @@ data class PipelineSettings(
             else -> 480
         }
 
-    /** Pixel width over pixel height: 2 for the analog frame, 1 for dither. */
+    /**
+     * Pixel height in the overlay's terms: the analog frame always has 480
+     * lines for 240 OSD rows, so its rows are drawn twice as tall.
+     */
     val pixelAspect: Int get() = if (ditherEnabled) 1 else 2
 
     /** The picture's shape on screen and in saved photos. */
@@ -167,7 +183,14 @@ class Pipeline(private val seed: Long = 1) {
      * Render one frame and return the viewfinder picture. With [clean] set,
      * also keep an overlay-free copy for [capture].
      */
-    fun process(src: IntArray, settings: PipelineSettings, osd: OsdState?, frame: Long, clean: Boolean = false): IntArray {
+    fun process(
+        src: IntArray,
+        settings: PipelineSettings,
+        osd: OsdState?,
+        frame: Long,
+        clean: Boolean = false,
+        keepOverlay: Boolean = false,
+    ): IntArray {
         val w = settings.width
         val h = settings.height
         require(src.size == w * h) { "frame is ${src.size} px, expected ${w}x$h" }
@@ -181,7 +204,11 @@ class Pipeline(private val seed: Long = 1) {
         } else {
             finish(bent, settings, w, h, frame)
         }
-        this.clean = if (!clean) null else if (osd == null) preview else finish(bent, settings, w, h, frame)
+        this.clean = when {
+            !clean -> null
+            osd == null || keepOverlay -> preview
+            else -> finish(bent, settings, w, h, frame)
+        }
         cleanW = w
         cleanH = h
         displayW = settings.displayWidth
@@ -194,7 +221,9 @@ class Pipeline(private val seed: Long = 1) {
         var out = px
         if (settings.vhsEnabled) out = Vhs.process(out, w, h, scaledVhs(settings.vhs, w, h), seed, frame)
         if (settings.ditherEnabled) {
-            if (settings.ditherContrast != 1f) out = contrast(out, settings.ditherContrast)
+            if (settings.ditherContrast != 1f || settings.ditherBrightness != 0f) {
+                out = tone(out, settings.ditherContrast, settings.ditherBrightness)
+            }
             out = Dither.apply(out, w, h, settings.algorithm, settings.palette)
         }
         return out
@@ -220,9 +249,9 @@ class Pipeline(private val seed: Long = 1) {
         return Photo(w, h, px)
     }
 
-    private fun contrast(px: IntArray, c: Float): IntArray = IntArray(px.size) { i ->
+    private fun tone(px: IntArray, c: Float, b: Float): IntArray = IntArray(px.size) { i ->
         val p = px[i]
-        fun ch(v: Int) = ((v - 128) * c + 128f).toInt().coerceIn(0, 255)
+        fun ch(v: Int) = ((v - 128) * c + 128f + b).toInt().coerceIn(0, 255)
         (0xFF shl 24) or (ch((p shr 16) and 0xFF) shl 16) or (ch((p shr 8) and 0xFF) shl 8) or ch(p and 0xFF)
     }
 

@@ -75,8 +75,10 @@ object Knobs {
     private val STYLES = DitherAlgorithm.entries
     private val PALETTES = listOf(
         Palettes.natural(2), Palettes.natural(3), Palettes.natural(4), Palettes.natural(6), Palettes.natural(8),
-        Palettes.ONE_BIT, Palettes.GAME_BOY, Palettes.GAME_BOY_BGB, Palettes.GAME_BOY_POCKET,
-        Palettes.CGA_1_HIGH, Palettes.CGA_0_HIGH, Palettes.CGA_5_HIGH, Palettes.EGA_16, Palettes.PICO_8,
+        Palettes.natural(16),
+        Palettes.ONE_BIT, Palettes.SEPIA, Palettes.GAME_BOY, Palettes.GAME_BOY_BGB, Palettes.GAME_BOY_POCKET,
+        Palettes.VIRTUAL_BOY, Palettes.CGA_1_HIGH, Palettes.CGA_0_HIGH, Palettes.CGA_5_HIGH, Palettes.EGA_16,
+        Palettes.C64, Palettes.ZX_SPECTRUM, Palettes.PICO_8,
     )
     private val PIXELS = Resolution.entries
 
@@ -86,6 +88,9 @@ object Knobs {
     fun ditherStyle(k: Float): DitherAlgorithm = pick(STYLES, k)
     fun palette(k: Float): Palette = pick(PALETTES, k)
     fun pixel(k: Float): Resolution = pick(PIXELS, k)
+
+    /** 0 -> darker by 80, 0.5 -> unchanged, 1 -> brighter by 80. */
+    fun brightness(k: Float): Float = (k.coerceIn(0f, 1f) - 0.5f) * 160f
 
     /** 0 -> half contrast, 0.5 -> unchanged, 1 -> double. */
     fun contrast(k: Float): Float = 0.5f * Math.pow(4.0, k.coerceIn(0f, 1f).toDouble()).toFloat()

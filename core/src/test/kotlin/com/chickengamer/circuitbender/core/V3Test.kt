@@ -121,8 +121,8 @@ class V3Test {
         assertTrue(palettes.size >= 12, "only ${palettes.size} colour choices")
         assertTrue(palettes.any { it.colors.size >= 64 && !it.monochrome }, "a natural-colour choice is reachable")
         val sizes = steps.map(Knobs::pixel).distinct()
-        assertEquals(6, sizes.size)
-        assertEquals(320, sizes.maxOf { it.width })
+        assertTrue(sizes.size >= 6, "only ${sizes.size} sizes")
+        assertEquals(640, sizes.maxOf { it.width })
         assertEquals(64, sizes.minOf { it.width })
 
         val base = PipelineSettings(ditherEnabled = true, vhsEnabled = false, palette = Palettes.ONE_BIT)

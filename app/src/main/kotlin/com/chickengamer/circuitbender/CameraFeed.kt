@@ -104,6 +104,15 @@ class CameraFeed(
         start()
     }
 
+    /** Multiply the zoom by [factor] within the lens's range; returns the new ratio. */
+    fun zoomBy(factor: Float): Float? {
+        val cam = camera ?: return null
+        val state = cam.cameraInfo.zoomState.value ?: return null
+        val ratio = (state.zoomRatio * factor).coerceIn(state.minZoomRatio, state.maxZoomRatio)
+        cam.cameraControl.setZoomRatio(ratio)
+        return ratio
+    }
+
     /** Remembered across rebinds, so the light stays on after FLIP. */
     fun setTorch(on: Boolean) {
         torch = on

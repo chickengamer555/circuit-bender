@@ -2,20 +2,21 @@
 
 A circuit-bent VHS camcorder in your phone, with no soldering iron needed.
 
-Point your phone and you get a cheap 90s camcorder: low resolution, soft bleeding colour, a little tape noise, and a REC / date overlay in the viewfinder. Two switches add the fun stuff:
+Point your phone and you get a 90s camcorder: an analog picture (samples along 480 lines, soft sideways, grey blacks, glowing highlights, grain in the shadows) with a REC / date overlay that sits behind the tape filter.
 
-- **BEND** glitches the camera the way a circuit-bent one does. There are three knobs:
-  - **NOISE**: shorted data lines. Sparkle at first, then posterised colour, then JPEG block errors.
-  - **TEAR**: pixel-clock and sync faults. Lines slip, then slant, then the picture rolls.
-  - **COLOUR**: analog gain, then a colour-filter slip that swaps the colour channels, then crossed wires.
-- **DITHER** turns the picture into retro dithered pixels. There are three knobs:
-  - **STYLE**: Bayer, Floyd–Steinberg, Atkinson (Mac) or Game Boy Camera.
-  - **PALETTE**: 1-bit, Game Boy green, CGA or PICO-8.
-  - **PIXEL**: 320, 160 or 128 (Game Boy) wide.
+Tap **VHS**, **Bend** or **Dither** to switch an effect on or off. **Adjust** opens its settings; tap outside to close them, and the effects stay on.
 
-**PHOTO** saves a PNG to `Pictures/CircuitBender`. **VIDEO** records an MP4 to `Movies/CircuitBender` (no sound yet). The camcorder overlay is only in the viewfinder: photos and videos are clean.
+- **VHS:** wear, colour bleed, softness, camera quality (toy cam 160 / VHS EP 240 / VHS SP 320 / Hi8 480 / sharp 640), glow, REC & date on/off, and whether it is burned into photos and videos.
+- **Bend:** noise, tear, colour, memory, roll and blocks, each modelled on a real circuit-bend point (data lines, pixel clock, sync, frame-buffer address lines, JPEG errors).
+- **Dither:** all 12 styles (Bayer, halftone, Game Boy Camera, Floyd–Steinberg, Atkinson, JJN, Stucki, Burkes, Sierra...); natural colours from 8 to 4096, or 1-bit, sepia, Game Boy, Virtual Boy, CGA, EGA, C64, ZX Spectrum or PICO-8; pixel size from 640x480 down to 64x48; contrast and brightness.
 
-It works in landscape (4:3) and portrait (3:4).
+**Shortcuts:**
+- Pinch to zoom.
+- Double-tap to flip camera.
+- Swipe left/right for VIDEO/PHOTO.
+- Volume buttons take the shot.
+
+Photos are saved as PNG in `Pictures/CircuitBender`, and videos as MP4 in `Movies/CircuitBender` (no sound yet). It works upright (3:4) and sideways (4:3).
 
 ## Install
 

@@ -57,7 +57,7 @@ class SimpleTest {
         // choices and every combination stays in its palette.
         assertEquals(DitherAlgorithm.entries.first(), Knobs.ditherStyle(0f))
         assertEquals(DitherAlgorithm.entries.last(), Knobs.ditherStyle(1f))
-        assertEquals(Resolution.CAMCORDER, Knobs.pixel(0f))
+        assertEquals(Resolution.entries.first(), Knobs.pixel(0f))
 
         for (style in listOf(0f, 0.35f, 0.65f, 1f)) for (pal in listOf(0f, 0.35f, 0.65f, 1f)) for (px in listOf(0f, 1f)) {
             val s = PipelineSettings(

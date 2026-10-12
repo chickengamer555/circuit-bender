@@ -550,6 +550,39 @@
       "contract_hash": "1227cf3d6ade7eb3e5d7837681630c73cfc2ee4c6f9b7ba611b3b86a999302c6",
       "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
       "confidence": "heuristic"
+    },
+    {
+      "task": "v4",
+      "unit": "v4",
+      "case": "quality-sets-samples-per-line-and-keeps-detail",
+      "key": "v4/quality-sets-samples-per-line-and-keeps-detail",
+      "matched_test": "V4Test > quality sets samples per line and keeps detail()",
+      "failed_at": "2026-10-12T11:27:14.034Z",
+      "contract_hash": "358547e0ac964d50d61a9080f3395a95716037d7754f3062146ab7d30c1187bc",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v4",
+      "unit": "v4",
+      "case": "dither-goes-bigger-with-more-palettes-and-brightness",
+      "key": "v4/dither-goes-bigger-with-more-palettes-and-brightness",
+      "matched_test": "V4Test > dither goes bigger with more palettes and brightness()",
+      "failed_at": "2026-10-12T11:27:14.034Z",
+      "contract_hash": "358547e0ac964d50d61a9080f3395a95716037d7754f3062146ab7d30c1187bc",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
+    },
+    {
+      "task": "v4",
+      "unit": "v4",
+      "case": "overlay-can-be-kept-in-photos",
+      "key": "v4/overlay-can-be-kept-in-photos",
+      "matched_test": "V4Test > overlay can be kept in photos()",
+      "failed_at": "2026-10-12T11:27:14.034Z",
+      "contract_hash": "358547e0ac964d50d61a9080f3395a95716037d7754f3062146ab7d30c1187bc",
+      "gate_command": ".\\gradlew.bat :core:test --console=plain --continue",
+      "confidence": "heuristic"
     }
   ]
 }

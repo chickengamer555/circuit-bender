@@ -30,14 +30,20 @@ class V4Test {
             assertEquals(640, up.height)
             assertEquals(3 to 4, up.displayWidth to up.displayHeight)
         }
-        // Stripes 1/80 of the picture wide: the sharp camera keeps them, the
-        // low-quality one smears them away.
+        // Fine stripes in the camera image (2 px on, 2 px off at 1280 wide):
+        // the 640-sample camera resolves them, the 240-sample one averages them
+        // away - through the real sampler and tape chain.
+        val cw = 1280
+        val ch = 960
+        val y = ByteArray(cw * ch) { (if ((it % cw) / 2 % 2 == 0) 40 else 200).toByte() }
+        val uv = ByteArray(cw * ch / 2) { 128.toByte() }
+        val planes = YuvPlanes(cw, ch, y, cw, uv, 0, uv, 1, cw, 2)
         fun stripeContrast(q: Quality): Double {
             val s = PipelineSettings(quality = q, vhs = VhsSettings().noiseless())
             val w = s.width
-            val src = IntArray(w * s.height) { grey(if ((it % w) * 80 / w % 2 == 0) 40 else 200) }
+            val src = CameraSampler.sample(planes, 0, w, s.height, s.displayWidth, s.displayHeight)
             val out = Pipeline(1).process(src, s, null, 0)
-            val row = out.copyOfRange(240 * w, 240 * w + w).map { luma(it).toDouble() }
+            val row = out.copyOfRange(240 * w + w / 4, 240 * w + 3 * w / 4).map { luma(it).toDouble() }
             return row.max() - row.min()
         }
         val sharp = stripeContrast(Quality.SHARP)
